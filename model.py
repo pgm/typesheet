@@ -199,7 +199,7 @@ class Storage(object):
             for value in binding.values:
                 if isinstance(value, InstanceRef):
                     row = self.get_by_id(value.id, [c.INSTANCE_OF])
-                    instance_types[value.id] = row.get_list(c.INSTANCE_OF)
+                    instance_types[value.id] = [x.id for x in row.get_list(c.INSTANCE_OF)]
         return instance_types
 
     def insert(self, id, bindings):

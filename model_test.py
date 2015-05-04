@@ -110,6 +110,7 @@ def test_reverse_property():
 def test_expected_type_ref_mismatch():
     s = create_storage()
 
+    s.insert_type(model.Type("ClassA", "Class A", name_is_unique=True))
     s.insert_type(model.Type("ClassB", "Class B", name_is_unique=True))
     s.insert_type(model.Type("ClassC", "Class C", name_is_unique=True))
     s.insert_property(model.Property("AtoB", "A to B", "ClassB"))
@@ -120,6 +121,6 @@ def test_expected_type_ref_mismatch():
     failures = s.insert("InstanceC", [model.Binding(c.INSTANCE_OF, [InstanceRef("ClassC")])])
     assert len(failures) == 0
 
-    failures = s.insert("InstanceA", [model.Binding("AtoB", [model.InstanceRef("InstanceC")]), model.Binding(c.INSTANCE_OF, ["ClassA"])])
+    failures = s.insert("InstanceA", [model.Binding("AtoB", [model.InstanceRef("InstanceC")]), model.Binding(c.INSTANCE_OF, [model.InstanceRef("ClassA")])])
     assert len(failures) > 0
 
