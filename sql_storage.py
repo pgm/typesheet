@@ -108,23 +108,31 @@ class Storage(object):
             db.execute("DELETE FROM instances WHERE instance = ?", (id,))
             db.execute("DELETE FROM unique_constraint WHERE instance = ?", (id,))
 
-    def insert(self, id, props, uk_props):
+    def insert(self, id, props, unique_value_properties, property_to_inverse_property):
         """id - instance id
            props - list of Bindings
            uk_props - list of (type_id, property_id) for each property which is defined as unique """
-        if uk_props != None:
-            unimp()
+        assert unique_value_properties != None
+        print "property_to_inverse_property", property_to_inverse_property
 
         with self.engine.begin() as db:
             for prop in props:
                 property_id = prop.property_id
+                inv_property_id = property_to_inverse_property.get(property_id)
 
                 for value in prop.values:
                     str_value, num_value, ref_value = expand_value(value)
 
                     db.execute(instances.insert().values(instance=id, property=property_id, str_value=str_value, num_value=num_value, ref_value=ref_value))
-                #if type_id, property_id in uk_props:
-                #    db.execute("INSERT INTO unique_constraint (type_instance, property, value, instance) VALUES (?, ?, ?, ?)", (type_id, property_id, value, id))
+
+                    # store inverse properties
+                    if inv_property_id != None:
+                        assert ref_value != None
+                        db.execute(instances.insert().values(instance=ref_value, property=inv_property_id, str_value=str_value, num_value=num_value, ref_value=id))
+
+                # insert into table to detect uk violations
+                for type_instance, property_id in unique_value_properties:
+                    db.execute(unique_constraint.insert().values(type_instance=type_instance, instance=id, property=property_id, value=repr(value)))
 
     def query(self, properties=None, predicate=None):
         s = select([instances.c.instance])
@@ -132,7 +140,9 @@ class Storage(object):
             s = s.where(predicate.make_sql_predicate())
 
         with self.engine.begin() as db:
+            print "finding ids: ", str(s)
             ids = db.execute(s).fetchall()
+            print "fetched ids: ", ids
 
             rec_filter = instances.c.instance.in_([x[0] for x in ids])
             if properties != None:

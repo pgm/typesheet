@@ -121,6 +121,8 @@ class InstanceRef(object):
         self.id = id
     def __repr__(self):
         return "<InstanceRef %r>" % (self.id, )
+    def __eq__(self, other):
+        return isinstance(other, InstanceRef) and other.id == self.id
 
 class Binding(object):
     def __init__(self, property_id, values):
@@ -178,7 +180,7 @@ class Storage(object):
             Binding(c.IS_UNIQUE, [str(prop_def.is_unique)]),
             Binding(c.INSTANCE_OF, [InstanceRef(c.PROPERTY_TYPE)])
         ]
-        self._insert( prop_def.id, bindings, None)
+        self._insert( prop_def.id, bindings, [], {})
 
     def insert_type(self, type_def):
         bindings = [
@@ -188,10 +190,10 @@ class Storage(object):
             Binding(c.PROPERTY, [InstanceRef(property_id) for property_id in type_def.property_ids] ),
             Binding(c.INSTANCE_OF, [InstanceRef(c.TYPE)])
         ]
-        self._insert( type_def.id, bindings, None)
+        self._insert( type_def.id, bindings, [], {})
 
-    def _insert(self, id, bindings, uk_properties):
-        self.db.insert(id, bindings, uk_properties)
+    def _insert(self, id, bindings, unique_value_properties, property_to_inverse_property):
+        self.db.insert(id, bindings, unique_value_properties, property_to_inverse_property)
 
     def _find_referenced_instance_types(self, bindings):
         instance_types = {}
@@ -218,11 +220,27 @@ class Storage(object):
         print "type_ids", type_ids
 
         instance_types = self._find_referenced_instance_types(bindings)
+
+        # collect all the properties for this type
         type_props = {}
+        unique_value_properties = set()
+        property_to_inverse_property = {}
         for type_id in type_ids:
             assert type(type_id) == str or type(type_id) == unicode
             type_def = self.dictionary.get_type(type_id)
-            type_props.update([(type_prop_id, self.dictionary.get_property(type_prop_id)) for type_prop_id in type_def.property_ids])
+
+            if type_def.name_is_unique:
+                unique_value_properties.add(c.NAME)
+
+            for type_prop_id in type_def.property_ids:
+                property = self.dictionary.get_property(type_prop_id)
+                type_props[type_prop_id] = property
+
+                if property.reverse_property_id != None:
+                    property_to_inverse_property[type_prop_id] = property.reverse_property_id
+
+                if property.is_unique:
+                    unique_value_properties.add((type_id, type_prop_id))
 
         failures.extend(validate(type_props, bindings, instance_types))
 
@@ -231,9 +249,8 @@ class Storage(object):
             if not (binding.property_id in type_props):
                 failures.append("Property %s not in any of %r" % (binding.property_id, type_ids))
 
-        print "failures", failures
         if len(failures) == 0:
-            self._insert(id, bindings, None)
+            self._insert(id, bindings, unique_value_properties, property_to_inverse_property)
 
         return failures
 

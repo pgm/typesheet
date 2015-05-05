@@ -10,17 +10,19 @@ def create_storage():
     s = model.Storage(sql_storage.Storage(db))
     return s
 
-def test_define_class_and_insert_instance():
-    s = create_storage()
-
-    s.insert_property(model.Property("PropA", "Prop A", c.STRING))
-    s.insert_type(model.Type("ClassA", "Class A", property_ids=["PropA"]))
-
+def dump_db(s):
     with s.db.engine.begin() as db:
         print ">>>>>>>>>>>>>"
         rows = db.execute(sql_storage.select([sql_storage.instances])).fetchall()
         for row in rows:
             print ">> ", row
+
+
+def test_define_class_and_insert_instance():
+    s = create_storage()
+
+    s.insert_property(model.Property("PropA", "Prop A", c.STRING))
+    s.insert_type(model.Type("ClassA", "Class A", property_ids=["PropA"]))
 
     failures = s.insert("InstanceA", [model.Binding("PropA", ["a"]), model.Binding(c.INSTANCE_OF, [InstanceRef("ClassA")])])
     assert len(failures) == 0
@@ -84,8 +86,8 @@ def test_reverse_property():
     s = create_storage()
 
     s.insert_type(model.Type("ClassB", "Class B", name_is_unique=True))
-    s.insert_property(model.Property("AtoB", "A to B", "ClassB"))
     s.insert_property(model.Property("BtoA", "B to A", "ClassA"))
+    s.insert_property(model.Property("AtoB", "A to B", "ClassB", reverse_property_id="BtoA"))
     s.insert_type(model.Type("ClassA", "Class A", property_ids=["AtoB"], name_is_unique=True))
 
     failures = s.insert("InstanceB", [model.Binding(c.INSTANCE_OF, [InstanceRef("ClassB")])])
@@ -93,14 +95,14 @@ def test_reverse_property():
     failures = s.insert("InstanceA", [model.Binding("AtoB", [model.InstanceRef("InstanceB")]), model.Binding(c.INSTANCE_OF, [InstanceRef("ClassA")])])
     assert len(failures) == 0
 
-    rows = s.query(["AtoB"], sql_storage.WithPropValue(c.INSTANCE_OF, "ClassA"))
+    rows = s.query(["AtoB"], sql_storage.WithPropValue(c.INSTANCE_OF, model.InstanceRef("ClassA")))
     assert len(rows) == 1
     row = rows[0]
     row.id == "InstanceA"
     value = row.get("AtoB")
     assert value == model.InstanceRef("InstanceB")
 
-    rows = s.query(["BtoA"], sql_storage.WithPropValue(c.INSTANCE_OF, "ClassB"))
+    rows = s.query(["BtoA"], sql_storage.WithPropValue(c.INSTANCE_OF, model.InstanceRef("ClassB")))
     assert len(rows) == 1
     row = rows[0]
     row.id == "InstanceB"
