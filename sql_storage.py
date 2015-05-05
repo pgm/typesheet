@@ -113,6 +113,7 @@ class Storage(object):
            props - list of Bindings
            uk_props - list of (type_id, property_id) for each property which is defined as unique """
         assert unique_value_properties != None
+        assert isinstance(unique_value_properties, dict)
         print "property_to_inverse_property", property_to_inverse_property
 
         with self.engine.begin() as db:
@@ -130,9 +131,10 @@ class Storage(object):
                         assert ref_value != None
                         db.execute(instances.insert().values(instance=ref_value, property=inv_property_id, str_value=str_value, num_value=num_value, ref_value=id))
 
-                # insert into table to detect uk violations
-                for type_instance, property_id in unique_value_properties:
-                    db.execute(unique_constraint.insert().values(type_instance=type_instance, instance=id, property=property_id, value=repr(value)))
+                    # insert into table to detect uk violations
+                    if property_id in unique_value_properties:
+                        for type_instance in unique_value_properties[property_id]:
+                            db.execute(unique_constraint.insert().values(type_instance=type_instance, instance=id, property=property_id, value=repr(value)))
 
     def query(self, properties=None, predicate=None):
         s = select([instances.c.instance])

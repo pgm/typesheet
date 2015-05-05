@@ -49,7 +49,7 @@ def test_unique_value_enforcement():
     s = create_storage()
 
     s.insert_property(model.Property("key", "key", c.STRING, is_unique=True))
-    s.insert_type(model.Type("ClassA", "Class A", property_ids=["PropA"]))
+    s.insert_type(model.Type("ClassA", "Class A", property_ids=["key"]))
 
     failures = s.insert("InstanceA", [model.Binding("key", ["a"]), model.Binding(c.INSTANCE_OF, [InstanceRef("ClassA")])])
     assert len(failures) == 0
@@ -75,8 +75,11 @@ def test_name_is_unique():
     s = create_storage()
 
     s.insert_type(model.Type("ClassA", "Class A", name_is_unique=True))
+    inserted_type = s.dictionary.get_type("ClassA")
+    assert inserted_type.name_is_unique
 
     failures = s.insert("InstanceA", [model.Binding(c.NAME, ["a"]), model.Binding(c.INSTANCE_OF, [InstanceRef("ClassA")])])
+    print failures
     assert len(failures) == 0
 
     failures = s.insert("InstanceB", [model.Binding(c.NAME, ["a"]), model.Binding(c.INSTANCE_OF, [InstanceRef("ClassA")])])

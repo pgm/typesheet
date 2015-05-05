@@ -3,6 +3,7 @@ __author__ = 'pgm'
 import sql_storage
 import constants as c
 import collections
+import sqlalchemy.exc
 
 class Type(object):
     def __init__(self, id, name, description="", included_type_ids=[], property_ids=[], name_is_unique=False):
@@ -94,7 +95,8 @@ class Dictionary(object):
                                  name=row.get(c.NAME),
                                  description=row.get(c.DESCRIPTION),
                                  included_type_ids=extract_id_from_refs(row.get_list(c.INCLUDED_TYPE)),
-                                 property_ids=extract_id_from_refs(row.get_list(c.PROPERTY))
+                                 property_ids=extract_id_from_refs(row.get_list(c.PROPERTY)),
+                                 name_is_unique=row.get(c.NAME_IS_UNIQUE, type=bool)
                                  )
         self.type_cache[id] = type_instance
         return type_instance
@@ -180,7 +182,7 @@ class Storage(object):
             Binding(c.IS_UNIQUE, [str(prop_def.is_unique)]),
             Binding(c.INSTANCE_OF, [InstanceRef(c.PROPERTY_TYPE)])
         ]
-        self._insert( prop_def.id, bindings, [], {})
+        self._insert( prop_def.id, bindings, {}, {})
 
     def insert_type(self, type_def):
         bindings = [
@@ -188,11 +190,13 @@ class Storage(object):
             Binding(c.DESCRIPTION, [type_def.description]),
             Binding(c.INCLUDED_TYPE, [InstanceRef(property_id) for property_id in type_def.included_type_ids]),
             Binding(c.PROPERTY, [InstanceRef(property_id) for property_id in type_def.property_ids] ),
-            Binding(c.INSTANCE_OF, [InstanceRef(c.TYPE)])
+            Binding(c.INSTANCE_OF, [InstanceRef(c.TYPE)]),
+            Binding(c.NAME_IS_UNIQUE, [str(type_def.name_is_unique)])
         ]
-        self._insert( type_def.id, bindings, [], {})
+        self._insert( type_def.id, bindings, {}, {})
 
     def _insert(self, id, bindings, unique_value_properties, property_to_inverse_property):
+        assert isinstance(unique_value_properties, dict)
         self.db.insert(id, bindings, unique_value_properties, property_to_inverse_property)
 
     def _find_referenced_instance_types(self, bindings):
@@ -223,14 +227,15 @@ class Storage(object):
 
         # collect all the properties for this type
         type_props = {}
-        unique_value_properties = set()
+        unique_value_properties = collections.defaultdict(lambda: set())
         property_to_inverse_property = {}
         for type_id in type_ids:
             assert type(type_id) == str or type(type_id) == unicode
             type_def = self.dictionary.get_type(type_id)
 
+            print ">>>>", type_def.name, "name is uq", type_def.name_is_unique
             if type_def.name_is_unique:
-                unique_value_properties.add(c.NAME)
+                unique_value_properties[c.NAME].add(type_id)
 
             for type_prop_id in type_def.property_ids:
                 property = self.dictionary.get_property(type_prop_id)
@@ -240,7 +245,7 @@ class Storage(object):
                     property_to_inverse_property[type_prop_id] = property.reverse_property_id
 
                 if property.is_unique:
-                    unique_value_properties.add((type_id, type_prop_id))
+                    unique_value_properties[type_prop_id].add(type_id)
 
         failures.extend(validate(type_props, bindings, instance_types))
 
@@ -249,8 +254,12 @@ class Storage(object):
             if not (binding.property_id in type_props):
                 failures.append("Property %s not in any of %r" % (binding.property_id, type_ids))
 
+        print "unique_value_properties", unique_value_properties
         if len(failures) == 0:
-            self._insert(id, bindings, unique_value_properties, property_to_inverse_property)
+            try:
+                self._insert(id, bindings, unique_value_properties, property_to_inverse_property)
+            except sqlalchemy.exc.IntegrityError:
+                failures = ["unique key violation"]
 
         return failures
 

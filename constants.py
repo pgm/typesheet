@@ -2,7 +2,8 @@ __author__ = 'pgm'
 
 STRING = "Core/String"
 INSTANCE_OF = "Core/Thing/InstanceOf"
-IS_UNIQUE = "Core/Type/IsUnique"
+NAME_IS_UNIQUE = "Core/Type/NameIsUnique"
+IS_UNIQUE = "Core/Property/IsUnique"
 REVERSE_PROPERTY = "Core/Type/ReverseProperty"
 PROPERTY = "Core/Type/Property"
 INCLUDED_TYPE = "Core/Type/IncludedType"
