@@ -1,0 +1,13 @@
+.table-focus {
+    border: 2px solid black;
+    background-color: #FFFF99;
+}
+
+.pending-change {
+    background-color: #FF9999;
+}
+
+th.table-town {
+    /* I don't fully understand, but this appears to not actually set the width, but it does avoid the resizing problem when the input box moves */
+    width: 200px;
+}
