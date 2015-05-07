@@ -5,11 +5,12 @@ import os.path
 from sqlalchemy import create_engine
 import model
 import collections
+import datetime
 
-from sqlalchemy import Table, Column, Numeric, Integer, String, MetaData, ForeignKey, select , and_
+from sqlalchemy import Table, Column, Numeric, Integer, String, TIMESTAMP, MetaData, ForeignKey, select , and_
 
 metadata = MetaData()
-instances = Table("instances", metadata,
+instance = Table("instance", metadata,
   Column("instance", String),
   Column("property", String),
   Column("str_value", String),
@@ -23,6 +24,33 @@ unique_constraint = Table("unique_constraint", metadata,
   Column("value", String),
   Column("instance", String),
 )
+
+owner = Table("owner", metadata,
+  Column('id', Integer, primary_key=True),
+  Column('name', String)
+)
+
+transaction = Table("transaction", metadata,
+  Column('txn', Integer, primary_key=True),
+  Column('owner_id', None, ForeignKey("owner.id")),
+  Column('time', TIMESTAMP)
+)
+
+journal = Table("journal", metadata,
+  Column('id', Integer, primary_key=True),
+  Column('txn', None, ForeignKey("transaction.txn")),
+  Column("operation", String),
+  Column("instance", String),
+  Column("property", String),
+  Column("str_value", String),
+  Column("num_value", Numeric),
+  Column("ref_value", String)
+)
+
+OP_ADD_VALUE = "AV"
+OP_DEL_VALUE = "DV"
+OP_ADD_INSTANCE = "AI"
+OP_DEL_INSTANCE = "DI"
 
 def unimp():
     raise Exception("unimp")
@@ -57,14 +85,14 @@ class WithPropValue(object):
         self.value = value
 
     def make_sql_predicate(self):
-        check_property = instances.c.property == self.property_id
+        check_property = instance.c.property == self.property_id
         if type(self.value) == str:
-            return and_(check_property, instances.c.str_value == self.value)
+            return and_(check_property, instance.c.str_value == self.value)
         elif type(self.value) == int or type(self.value) == float:
-            return and_(check_property, instances.c.num_value == self.value)
+            return and_(check_property, instance.c.num_value == self.value)
         else:
             assert isinstance(self.value, model.InstanceRef)
-            return and_(check_property, instances.c.ref_value == self.value.id)
+            return and_(check_property, instance.c.ref_value == self.value.id)
 
 class WithId(object):
     def __init__(self, id):
@@ -72,7 +100,7 @@ class WithId(object):
         self.id = id
 
     def make_sql_predicate(self):
-        return instances.c.instance == self.id
+        return instance.c.instance == self.id
 
 class Row(object):
     def __init__(self, id, properties, map):
@@ -98,14 +126,13 @@ class Row(object):
     def get_list(self, property_id):
         return self.map[property_id]
 
-
 class Storage(object):
     def __init__(self, engine):
         self.engine = engine
 
     def delete(self, id):
         with self.engine.begin() as db:
-            db.execute("DELETE FROM instances WHERE instance = ?", (id,))
+            db.execute("DELETE FROM instance WHERE instance = ?", (id,))
             db.execute("DELETE FROM unique_constraint WHERE instance = ?", (id,))
 
     def insert(self, id, props, unique_value_properties, property_to_inverse_property):
@@ -117,6 +144,10 @@ class Storage(object):
         print "property_to_inverse_property", property_to_inverse_property
 
         with self.engine.begin() as db:
+            result = db.execute(transaction.insert().values(time=datetime.datetime.now()))
+            txn_id = result.inserted_primary_key[0]
+
+            db.execute(journal.insert().values(txn=txn_id, operation=OP_ADD_INSTANCE, instance=id))
             for prop in props:
                 property_id = prop.property_id
                 inv_property_id = property_to_inverse_property.get(property_id)
@@ -124,12 +155,13 @@ class Storage(object):
                 for value in prop.values:
                     str_value, num_value, ref_value = expand_value(value)
 
-                    db.execute(instances.insert().values(instance=id, property=property_id, str_value=str_value, num_value=num_value, ref_value=ref_value))
+                    db.execute(journal.insert().values(txn=txn_id, operation=OP_ADD_VALUE, instance=id, property=property_id, str_value=str_value, num_value=num_value, ref_value=ref_value))
+                    db.execute(instance.insert().values(instance=id, property=property_id, str_value=str_value, num_value=num_value, ref_value=ref_value))
 
                     # store inverse properties
                     if inv_property_id != None:
                         assert ref_value != None
-                        db.execute(instances.insert().values(instance=ref_value, property=inv_property_id, str_value=str_value, num_value=num_value, ref_value=id))
+                        db.execute(instance.insert().values(instance=ref_value, property=inv_property_id, str_value=str_value, num_value=num_value, ref_value=id))
 
                     # insert into table to detect uk violations
                     if property_id in unique_value_properties:
@@ -137,7 +169,7 @@ class Storage(object):
                             db.execute(unique_constraint.insert().values(type_instance=type_instance, instance=id, property=property_id, value=repr(value)))
 
     def query(self, properties=None, predicate=None):
-        s = select([instances.c.instance])
+        s = select([instance.c.instance])
         if predicate != None:
             s = s.where(predicate.make_sql_predicate())
 
@@ -146,11 +178,11 @@ class Storage(object):
             ids = db.execute(s).fetchall()
             print "fetched ids: ", ids
 
-            rec_filter = instances.c.instance.in_([x[0] for x in ids])
+            rec_filter = instance.c.instance.in_([x[0] for x in ids])
             if properties != None:
                 rec_filter = and_(rec_filter,
-                     instances.c.property.in_(properties))
-            s = select([instances.c.instance, instances.c.property, instances.c.num_value, instances.c.str_value, instances.c.ref_value]).where(
+                     instance.c.property.in_(properties))
+            s = select([instance.c.instance, instance.c.property, instance.c.num_value, instance.c.str_value, instance.c.ref_value]).where(
                 rec_filter
             )
             print s
