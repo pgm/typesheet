@@ -133,15 +133,16 @@ function mockUpdateProperty(id, property_id, values) {
     return p;
 }
 
+
 function initTableTown(tableDivId) {
     var columns = [ {name: "col1"}, {name: "col2"}, {name: "col3"} ] ; // need column definition which will control how the elements in row will be rendered
     // initially add support for formatting strings and numbers
     // column name, format, prop id.
     // row needs id
-    var rows = [
-        {id: "x", data:[ ["a"], [], ["c"] ]},
-        {id: "y", data:[ ["a2"], ["a2", "b2"], ["a2"] ]},
-        {id: "z", data:[ ["a3"], ["a3"], ["a3"] ]}
+    var data = [
+        [ ["a"], [], ["c"] ],
+        [ ["a2"], ["a2", "b2"], ["a2"] ],
+        [ ["a3"], ["a3"], ["a3"] ]
     ];
 
     var editorState = {
@@ -151,32 +152,18 @@ function initTableTown(tableDivId) {
         editorValue: "x"
     }
 
-    var state = {columns: columns, rows: rows, editorState: editorState, pendingChanges: {} };
+    var state = {
+        columns: columns,
+        rows: [{id: "x"}, {id: "y"}, {id: "z"}],
+        data: data,
+        editorState: editorState,
+        pendingChanges: {},
+        instanceToRow:{x: 0, y: 1, z: 2},
+        propertyToRow:{col1: 0, col2: 1, col3: 2}
+        };
+
     var editor = null;
 
-    var applyChange = function(state, row, column, element, newValue) {
-        if(newValue == "") {
-            // if empty, delete the element
-            var update1 = {$splice: [[element, 1]]};
-            var update2 = {};
-            update2[column] = update1;
-            var update3 = {};
-            update3[row] = {data: update2};
-            var fullUpdate = {rows: update3};
-        } else {
-            // otherwise, set the value
-            var update0 = {$set: newValue};
-            var update1 = {};
-            update1[element] = update0;
-            var update2 = {};
-            update2[column] = update1;
-            var update3 = {};
-            update3[row] = {data: update2};
-            var fullUpdate = {rows: update3};
-        }
-
-        return React.addons.update(state, fullUpdate);
-    };
 
     var controller = {
 
