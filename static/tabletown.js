@@ -33,10 +33,12 @@ var Table = React.createClass({displayName: "Table",
             }
 
             var rows = this.props.rows;
+            var data = this.props.data;
+
             for(var i=0;i<rows.length;i++) {
 
                 var tableCells = [];
-                var row = rows[i].data;
+                var row = data[i];
 
                 for(var col=0;col<row.length;col++) {
                     var cell = row[col];
@@ -68,8 +70,12 @@ var Table = React.createClass({displayName: "Table",
                                 );
                             } else {
                                 elements.push(
-                                    React.createElement("input", {key: elKey, value: editorState.editorValue, onChange: this.textEditorChanged, onClick: this.stopPropagation})
+                                    React.createElement("div", {key: elKey, className: "pending-change", contentEditable: "true"}, 
+                                        pendingChange
+                                    )
                                 );
+                                //                                     <input key={elKey} value={editorState.editorValue} onChange={this.textEditorChanged} onClick={this.stopPropagation}/>
+
                             }
                         } else {
                                 var element = cell[d];
@@ -97,7 +103,7 @@ var Table = React.createClass({displayName: "Table",
             }
 
             return (
-                React.createElement("table", {className: "table table-bordered"}, 
+                React.createElement("table", {className: "table-town"}, 
                     React.createElement("thead", null, 
                         React.createElement("tr", null, 
                             headerCells
@@ -117,7 +123,7 @@ var TableCtl = React.createClass({displayName: "TableCtl",
     },
     render: function() {
         return (
-            React.createElement(Table, {columns: this.state.columns, rows: this.state.rows, editorState: this.state.editorState, controller: this.props.controller, pendingChanges: this.state.pendingChanges})
+            React.createElement(Table, {columns: this.state.columns, data: this.state.data, rows: this.state.rows, editorState: this.state.editorState, controller: this.props.controller, pendingChanges: this.state.pendingChanges})
         );
     }
 });
@@ -134,17 +140,9 @@ function mockUpdateProperty(id, property_id, values) {
 }
 
 
-function initTableTown(tableDivId) {
-    var columns = [ {name: "col1"}, {name: "col2"}, {name: "col3"} ] ; // need column definition which will control how the elements in row will be rendered
-    // initially add support for formatting strings and numbers
-    // column name, format, prop id.
-    // row needs id
-    var data = [
-        [ ["a"], [], ["c"] ],
-        [ ["a2"], ["a2", "b2"], ["a2"] ],
-        [ ["a3"], ["a3"], ["a3"] ]
-    ];
 
+
+function initTableTown(tableDivId) {
     var editorState = {
         row: 1,
         column: 2,
@@ -152,18 +150,44 @@ function initTableTown(tableDivId) {
         editorValue: "x"
     }
 
-    var state = {
-        columns: columns,
-        rows: [{id: "x"}, {id: "y"}, {id: "z"}],
-        data: data,
-        editorState: editorState,
-        pendingChanges: {},
-        instanceToRow:{x: 0, y: 1, z: 2},
-        propertyToRow:{col1: 0, col2: 1, col3: 2}
-        };
+    var s = emptyModel();
+    s = applyAddProperty(s, "x")
+    s = applyAddProperty(s, "y")
+    s = applyAddProperty(s, "z")
+    s = applyUpdate(s, {op: "AI", instance: "a"} )
+    s = applyUpdate(s, {op: "AI", instance: "b"} )
+    s = applyUpdate(s, {op: "AI", instance: "c"} )
+    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"00"} )
+    //s = applyUpdate(s, {op: "AV", instance: "c", property:"x", value:"20"} )
+    s.editorState = editorState;
+    s.pendingChanges = {};
 
+    var state = s;
     var editor = null;
 
+    var applyChange = function(state, row, column, element, newValue) {
+        if(newValue == "") {
+            // if empty, delete the element
+            var update1 = {$splice: [[element, 1]]};
+            var update2 = {};
+            update2[column] = update1;
+            var update3 = {};
+            update3[row] = {data: update2};
+            var fullUpdate = {rows: update3};
+        } else {
+            // otherwise, set the value
+            var update0 = {$set: newValue};
+            var update1 = {};
+            update1[element] = update0;
+            var update2 = {};
+            update2[column] = update1;
+            var update3 = {};
+            update3[row] = {data: update2};
+            var fullUpdate = {rows: update3};
+        }
+
+        return React.addons.update(state, fullUpdate);
+    };
 
     var controller = {
 
@@ -194,4 +218,16 @@ function initTableTown(tableDivId) {
     editor = React.render(
         React.createElement(TableCtl, {initialState: state, controller: controller}),
         document.getElementById(tableDivId));
+
+    setInterval(function() {
+        console.log("exec apply")
+        var elements = state.data[2][0];
+        var i = 0;
+        if(elements.length > 0) {
+            state = applyUpdate(state, {op: "DV", instance: "c", property:"x", value:elements[0]} )
+            i = parseInt(elements[0]);
+        }
+        state = applyUpdate(state, {op: "AV", instance: "c", property:"x", value:""+(i+1)} )
+        editor.setState(state)
+    }, 3000);
 }

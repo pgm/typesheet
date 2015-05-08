@@ -7,11 +7,14 @@
 
 var emptyModel = function() {
     var state = {
+        version: 0,
         columns: [],
         rows: [],
         data: [],
-        instanceToRow:{},
-        propertyToColumn:{}
+        instanceToRow: {},
+        propertyToColumn:{},
+        pending: [],
+        uncommitted: []
         };
      return state;
 }
@@ -47,6 +50,14 @@ var applyAddValue = function(state, instance, property, value) {
         return state;
     }
 
+    // before bothering to add the value, check to see if it is already there
+    var values = state.data[row][column];
+    for(var i=0;i<values.length;i++) {
+        if(values[i] == value) {
+            return state;
+        }
+    }
+
     var update1 = {$push: [value]};
     var update2 = {};
     update2[column] = update1;
@@ -79,7 +90,7 @@ var applyDelValue = function(state, instance, property, value) {
     var row = state.instanceToRow[instance];
     var column = state.propertyToColumn[property];
 
-    if(!row || !column) {
+    if(row == undefined || column == undefined) {
         // update doesn't affect our copy of state
         return state;
     }
@@ -88,8 +99,8 @@ var applyDelValue = function(state, instance, property, value) {
     var update2 = {};
     update2[column] = update1;
     var update3 = {};
-    update3[row] = {data: update2};
-    var fullUpdate = {rows: update3};
+    update3[row] = update2;
+    var fullUpdate = {data: update3};
 
     return React.addons.update(state, fullUpdate);
 };
@@ -167,5 +178,60 @@ var applyDelProperty = function(state, property) {
         propertyToColumn: {$set: newPropertyToColumn}
     };
 
+    return React.addons.update(state, update)
+}
+
+
+// API used by tabletown
+
+var applyAddElement = function(state, row, column, value) {
+    var op = {op: "AV", instance: state.rows[row], property:state.columns[column], value:value}
+
+    var update = {uncommitted: {$push: [op]}};
+    return React.addons.update(state, update);
+}
+
+var applyRemoveElement = function(state, row, column, element) {
+    var op = {op: "DV", instance: state.rows[row], property:state.columns[column], value:state.data[row][column]}
+
+    var update = {uncommitted: {$push: [op]}};
+    return React.addons.update(state, update);
+}
+
+var applyCommitted = function(state, updates) {
+    var updateSet = {};
+    for(var i=0;i<updates.length;i++){
+        var u = updates[i];
+        var key = [u.op, u.instance, u.property, u.value].join(":")
+        updateSet[key] = 1;
+    }
+
+    // only keep those which have not been committed
+    var newUncommitted = [];
+    for(var i=0;i<state.uncommitted.length;i++) {
+        var u = state.uncommitted[i];
+        var key = [u.op, u.instance, u.property, u.value].join(":")
+        if(!(key in updateSet)) {
+            newUncommitted.push(u);
+        }
+    }
+
+    var update = {uncommitted: {$set: newUncommitted}, pending: {$push: updates}};
+    return React.addons.update(state, update);
+}
+
+var applySyncComplete = function(state, newVersion) {
+    // clear all updates
+    var newPending = [];
+    var pending = state.pending;
+
+    for(var i=0;i<pending.length;i++) {
+        var p = pending[i];
+        if(p.version && p.version > newVersion) {
+            newPending.push(p)
+        }
+    }
+
+    var update = {version: {$set: newVersion}, pending: {$set: newPending}};
     return React.addons.update(state, update)
 }

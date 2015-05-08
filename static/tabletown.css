@@ -7,7 +7,23 @@
     background-color: #FF9999;
 }
 
-th.table-town {
+table.table-town {
+    width: 100%;
+    max-width: 100%;
+
+    border: 1px solid black;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+table.table-town td, table.table-town th {
+  border: 1px solid lightgray;
+  border-spacing: 0;
+  border-collapse: collapse;
+  height: 20px;
+}
+
+table.table-town th {
     /* I don't fully understand, but this appears to not actually set the width, but it does avoid the resizing problem when the input box moves */
     width: 200px;
 }

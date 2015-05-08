@@ -5,6 +5,25 @@ describe("TableModel", function() {
     s = emptyModel();
   });
 
+  it("has add/remove operations which use \"set\" semantics", function() {
+    s = applyAddProperty(s, "x")
+    s = applyUpdate(s, {op: "AI", instance: "a"} )
+
+    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"0"} )
+    expect(s.data[0][0]).toEqual(["0"])
+
+    // adding same value should have no change
+    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"0"} )
+    expect(s.data[0][0]).toEqual(["0"])
+
+    // adding different value should work
+    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"1"} )
+    expect(s.data[0][0]).toEqual(["0", "1"])
+
+    s = applyUpdate(s, {op: "DV", instance: "a", property:"x", value:"0"} )
+    expect(s.data[0][0]).toEqual(["1"])
+  })
+
   it("stays consistent over operations", function() {
     expect(s).toBeConsistent();
 

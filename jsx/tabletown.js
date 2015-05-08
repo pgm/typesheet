@@ -33,10 +33,12 @@ var Table = React.createClass({
             }
 
             var rows = this.props.rows;
+            var data = this.props.data;
+
             for(var i=0;i<rows.length;i++) {
 
                 var tableCells = [];
-                var row = rows[i].data;
+                var row = data[i];
 
                 for(var col=0;col<row.length;col++) {
                     var cell = row[col];
@@ -68,8 +70,12 @@ var Table = React.createClass({
                                 );
                             } else {
                                 elements.push(
-                                    <input key={elKey} value={editorState.editorValue} onChange={this.textEditorChanged} onClick={this.stopPropagation}/>
+                                    <div key={elKey} className="pending-change" contentEditable="true">
+                                        {pendingChange}
+                                    </div>
                                 );
+                                //                                     <input key={elKey} value={editorState.editorValue} onChange={this.textEditorChanged} onClick={this.stopPropagation}/>
+
                             }
                         } else {
                                 var element = cell[d];
@@ -97,7 +103,7 @@ var Table = React.createClass({
             }
 
             return (
-                <table className="table table-bordered">
+                <table className="table-town">
                     <thead>
                         <tr>
                             {headerCells}
@@ -117,7 +123,7 @@ var TableCtl = React.createClass({
     },
     render: function() {
         return (
-            <Table columns={this.state.columns} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} pendingChanges={this.state.pendingChanges} />
+            <Table columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} pendingChanges={this.state.pendingChanges} />
         );
     }
 });
@@ -133,17 +139,10 @@ function mockUpdateProperty(id, property_id, values) {
     return p;
 }
 
-function initTableTown(tableDivId) {
-    var columns = [ {name: "col1"}, {name: "col2"}, {name: "col3"} ] ; // need column definition which will control how the elements in row will be rendered
-    // initially add support for formatting strings and numbers
-    // column name, format, prop id.
-    // row needs id
-    var rows = [
-        {id: "x", data:[ ["a"], [], ["c"] ]},
-        {id: "y", data:[ ["a2"], ["a2", "b2"], ["a2"] ]},
-        {id: "z", data:[ ["a3"], ["a3"], ["a3"] ]}
-    ];
 
+
+
+function initTableTown(tableDivId) {
     var editorState = {
         row: 1,
         column: 2,
@@ -151,7 +150,19 @@ function initTableTown(tableDivId) {
         editorValue: "x"
     }
 
-    var state = {columns: columns, rows: rows, editorState: editorState, pendingChanges: {} };
+    var s = emptyModel();
+    s = applyAddProperty(s, "x")
+    s = applyAddProperty(s, "y")
+    s = applyAddProperty(s, "z")
+    s = applyUpdate(s, {op: "AI", instance: "a"} )
+    s = applyUpdate(s, {op: "AI", instance: "b"} )
+    s = applyUpdate(s, {op: "AI", instance: "c"} )
+    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"00"} )
+    //s = applyUpdate(s, {op: "AV", instance: "c", property:"x", value:"20"} )
+    s.editorState = editorState;
+    s.pendingChanges = {};
+
+    var state = s;
     var editor = null;
 
     var applyChange = function(state, row, column, element, newValue) {
@@ -207,4 +218,16 @@ function initTableTown(tableDivId) {
     editor = React.render(
         <TableCtl initialState={state} controller={controller}/>,
         document.getElementById(tableDivId));
+
+    setInterval(function() {
+        console.log("exec apply")
+        var elements = state.data[2][0];
+        var i = 0;
+        if(elements.length > 0) {
+            state = applyUpdate(state, {op: "DV", instance: "c", property:"x", value:elements[0]} )
+            i = parseInt(elements[0]);
+        }
+        state = applyUpdate(state, {op: "AV", instance: "c", property:"x", value:""+(i+1)} )
+        editor.setState(state)
+    }, 3000);
 }
