@@ -1,4 +1,86 @@
 
+var ElementEditor = React.createClass({displayName: "ElementEditor",
+    componentDidMount:function() {
+        this.cancelled = false;
+    },
+    onBlur: function(event) {
+        if(!this.cancelled) {
+            var newValue = event.target.textContent;
+            console.log("new value:", newValue);
+            this.props.onChange(newValue);
+        }
+    },
+    render: function() {
+        return (
+            React.createElement("div", {className: "pending-change", contentEditable: "true", onBlur: this.onBlur}, 
+                this.props.value
+            )
+            );
+    }
+});
+
+var TableCell = React.createClass({displayName: "TableCell",
+    render: function() {
+        var controller = this.props.controller;
+        var row = this.props.row;
+        var col = this.props.col;
+        var cell = this.props.cell;
+        var pendingChanges = this.props.pendingChanges;
+        var editorState = this.props.editorState;
+
+        var cellKey="c"+row+"."+col;
+
+        var elements = [];
+        var cellCount = cell.length;
+        if(editorState.row == row && editorState.column == col && editorState.element >= cellCount ) {
+            cellCount = editorState.element + 1;
+//            console.log("adding extra cell", cellCount);
+        }
+
+        for(var d=0;d<cellCount;d++) {
+            var elKey = cellKey+"."+d;
+
+            if (elKey in pendingChanges) {
+                var pendingChange = pendingChanges[elKey];
+                elements.push(
+                    React.createElement("div", {key: elKey, className: "pending-change"}, 
+                        pendingChange
+                    )
+                );
+            } else if(editorState.row == row && editorState.column == col && editorState.element == d) {
+                if(editorState.editorValue == null) {
+                    var element = cell[d];
+                    elements.push(
+                        React.createElement("div", {key: elKey, className: "table-focus"}, 
+                            element
+                        )
+                    );
+                } else {
+                    elements.push(
+                        React.createElement(ElementEditor, {key: elKey, value: pendingChange, onChange: controller.elementUpdated})
+                    );
+
+                }
+            } else {
+                var element = cell[d];
+                    //onClick={this.setElementFocus(i, col, d)}
+                elements.push(
+                    React.createElement("div", {key: elKey}, 
+                        element
+                    )
+                );
+            }
+        }
+
+        return (
+            React.createElement("td", null, 
+                elements
+            )
+            );
+    }
+});
+
+
 var Table = React.createClass({displayName: "Table",
 //        keyPress: function(event) {
 //            console.log("keyPress", event.ctrlKey, event.charCode, event.key, event.keyCode);
@@ -42,55 +124,11 @@ var Table = React.createClass({displayName: "Table",
 
                 for(var col=0;col<row.length;col++) {
                     var cell = row[col];
-                    var cellKey="c"+i+"."+col;
+                    var cellKey = "c"+i+"."+col;
 
-                    var elements = [];
-                    var cellCount = cell.length;
-                    if(editorState.row == i && editorState.column == col && editorState.element >= cellCount ) {
-                        cellCount = editorState.element + 1;
-                        console.log("adding extra cell", cellCount);
-                    }
-                    for(var d=0;d<cellCount;d++) {
-                        var elKey = cellKey+"."+d;
-
-                        if (elKey in pendingChanges) {
-                            var pendingChange = pendingChanges[elKey];
-                            elements.push(
-                                React.createElement("div", {key: elKey, className: "pending-change"}, 
-                                    pendingChange
-                                )
-                            );
-                        } else if(editorState.row == i && editorState.column == col && editorState.element == d) {
-                            if(editorState.editorValue == null) {
-                                var element = cell[d];
-                                elements.push(
-                                    React.createElement("div", {key: elKey, className: "table-focus"}, 
-                                        element
-                                    )
-                                );
-                            } else {
-                                elements.push(
-                                    React.createElement("div", {key: elKey, className: "pending-change", contentEditable: "true"}, 
-                                        pendingChange
-                                    )
-                                );
-                                //                                     <input key={elKey} value={editorState.editorValue} onChange={this.textEditorChanged} onClick={this.stopPropagation}/>
-
-                            }
-                        } else {
-                                var element = cell[d];
-                            elements.push(
-                                React.createElement("div", {key: elKey, onClick: this.setElementFocus(i, col, d)}, 
-                                    element
-                                )
-                            );
-                        }
-                    }
-
+                    //onClick={this.setElementFocus(i, col, cell.length)}
                     tableCells.push(
-                        React.createElement("td", {key: cellKey, onClick: this.setElementFocus(i, col, cell.length)}, 
-                            elements
-                        )
+                        React.createElement(TableCell, {key: cellKey, row: i, col: col, cell: cell, pendingChanges: pendingChanges, editorState: editorState, controller: this.props.controller})
                     );
                 }
 
@@ -189,6 +227,55 @@ function initTableTown(tableDivId) {
         return React.addons.update(state, fullUpdate);
     };
 
+    // Mock db
+    var db = {
+        txnId: 1,
+        transactions: [],
+        update: function(ops) {
+            var promise = new Promise(function(resolve, reject){
+                // after 1 second report transaction id
+                setTimeout(function(){
+                    db.txnId++;
+                    db.transactions.push({txn: db.txnId, ops: ops});
+                    resolve({txn: db.txnId});
+                }, 1000);
+            });
+
+            return promise;
+        },
+        queryUpdates: function(afterTxn) {
+//            console.log("queryUpdates", afterTxn, db.transactions);
+            var updates = [];
+            for(var i=0;i<db.transactions.length;i++){
+                var u = db.transactions[i];
+                if(u.txn > afterTxn) {
+                    console.log("found transaction", u);
+                    updates = updates.concat(u.ops);
+//                    for(var ui=0;ui<u.ops.length;ui++) {
+//                        console.log("ui=",ui);
+//                        updates.push(u.ops[ui]);
+//                    }
+                }
+            }
+
+            if(updates.length > 0){
+            console.log(" queryUpdates update", updates);
+            }
+
+            var latestTxn = db.txnId;
+
+            var promise = new Promise(function(resolve, reject){
+
+                // after 1 second report updates
+                setTimeout(function(){
+                    resolve({txn: latestTxn, ops: updates});
+                }, 1000);
+            });
+
+            return promise;
+        }
+    }
+
     var controller = {
 
         setElementFocus: function(row, column, element) {
@@ -209,9 +296,29 @@ function initTableTown(tableDivId) {
             state = React.addons.update(state, {editorState: {$set: newEditorState}})
             editor.setState(state);
         },
+        // can we drop this?
         textEditorChanged: function(value) {
             state = React.addons.update(state, {editorState: {editorValue: {$set: value}}})
             editor.setState(state);
+        },
+        elementUpdated: function(value) {
+            var eState = state.editorState;
+            console.log("set element (", eState.row, ", ", eState.column, ", ", eState.element, ") to ", value);
+
+            var updates = [];
+            if(eState.element >= state.data[eState.row][eState.column].length) {
+                // this is a new element, so don't remove anything
+            } else {
+                // this is the replacement of an existing element
+                var oldValue = state.data[eState.row][eState.column][eState.element];
+                updates.push({op: "DV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: oldValue})
+            }
+            updates.push({op: "AV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: value})
+
+            db.update(updates).then(function(txn) {
+                state = applyCommitted(state, txn, updates);
+                console.log("updated state with committed", state);
+            });
         }
     };
 
@@ -220,14 +327,19 @@ function initTableTown(tableDivId) {
         document.getElementById(tableDivId));
 
     setInterval(function() {
-        console.log("exec apply")
-        var elements = state.data[2][0];
-        var i = 0;
-        if(elements.length > 0) {
-            state = applyUpdate(state, {op: "DV", instance: "c", property:"x", value:elements[0]} )
-            i = parseInt(elements[0]);
-        }
-        state = applyUpdate(state, {op: "AV", instance: "c", property:"x", value:""+(i+1)} )
-        editor.setState(state)
-    }, 3000);
+//        console.log("exec apply")
+        db.queryUpdates(state.version).then(function(response) {
+
+            if(state.version != response.txn) {
+                console.log("apply updates from server response ", response);
+                var updates = response.ops;
+                for(var i=0;i<updates.length;i++) {
+                    console.log("apply updates from server", updates[i]);
+                    state = applyUpdate(state, updates[i] )
+                }
+                state = applySyncComplete(state, response.txn);
+                editor.setState(state);
+            }
+        });
+   }, 1000);
 }

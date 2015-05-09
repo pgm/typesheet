@@ -198,7 +198,8 @@ var applyRemoveElement = function(state, row, column, element) {
     return React.addons.update(state, update);
 }
 
-var applyCommitted = function(state, updates) {
+// called after updates have been sent and committed
+var applyCommitted = function(state, txn, updates) {
     var updateSet = {};
     for(var i=0;i<updates.length;i++){
         var u = updates[i];
@@ -216,7 +217,12 @@ var applyCommitted = function(state, updates) {
         }
     }
 
-    var update = {uncommitted: {$set: newUncommitted}, pending: {$push: updates}};
+    var updatesWithTxn = [];
+    for(var i=0;i<updates.length;i++){
+        updatesWithTxn.push( React.addons.update(updates[i], {txn: {$set: txn}}))
+    }
+
+    var update = {uncommitted: {$set: newUncommitted}, pending: {$push: updatesWithTxn}};
     return React.addons.update(state, update);
 }
 
