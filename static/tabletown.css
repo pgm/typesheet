@@ -27,3 +27,21 @@ table.table-town th {
     /* I don't fully understand, but this appears to not actually set the width, but it does avoid the resizing problem when the input box moves */
     width: 200px;
 }
+
+table.table-town .add-button {
+    background-color: transparent;
+    padding-left: 5px;
+    padding-right: 5px;
+    color: transparent;
+    float: right;
+}
+
+table.table-town .add-button:hover {
+    background-color: lightgray;
+    padding-left: 5px;
+    padding-right: 5px;
+    color: white;
+    float: right;
+    cursor: pointer;
+    /* border-left: gray solid 1px; */
+}

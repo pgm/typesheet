@@ -20,63 +20,116 @@ var ElementEditor = React.createClass({
 });
 
 var TableCell = React.createClass({
+    getElements: function(row, col, uncommitted, committed, cell, editorState) {
+        // first, merge pending operations with current to get elements
+        // if there are no elements, then clicking should open an editor at that position
+        // if there are elements, the last element should get a plus sign
+        // clicking an existing element should result in that element being edited (only for elements which are up-to-date.)
+        //      add "oldValue" to editorState to avoid problems with trying to edit value which has not yet committed?
+
+        var elements = [];
+
+        for(var d=0;d<cell.length;d++) {
+            if(editorState.row == row && editorState.column == col && editorState.element == d) {
+                elements.push({type:"editor", value: editorState.value});
+            } else {
+                elements.push({type:"data", value: cell[d]})
+            }
+        }
+
+        for(var i=0;i<committed.length;i++) {
+            var update = committed[i];
+            if(update.op == "DV") {
+                updateTypeForValue(update.value, "committed-deleted-data");
+            } else if(update.op == "AV"){
+                elements.push({type:"committed", value: update.value})
+            } else {
+                console.log("unknown op", update);
+            }
+        }
+
+        for(var i=0;i<uncommitted.length;i++) {
+            var update = uncommitted[i];
+            if(update.op == "DV") {
+                updateTypeForValue(update.value, "uncommitted-deleted-data");
+            } else if(update.op == "AV"){
+                elements.push({type:"uncommitted", value: update.value})
+            } else {
+                console.log("unknown op", update);
+            }
+        }
+
+        if(editorState.row == row && editorState.column == col && editorState.element >= cell.length ) {
+            elements.push({type:"editor", value: editorState.value})
+        }
+
+        return elements;
+    },
     render: function() {
         var controller = this.props.controller;
         var row = this.props.row;
         var col = this.props.col;
         var cell = this.props.cell;
-        var pendingChanges = this.props.pendingChanges;
         var editorState = this.props.editorState;
+        var uncommitted = this.props.uncommitted;
+        var committed = this.props.committed;
 
         var cellKey="c"+row+"."+col;
 
-        var elements = [];
-        var cellCount = cell.length;
-        if(editorState.row == row && editorState.column == col && editorState.element >= cellCount ) {
-            cellCount = editorState.element + 1;
-//            console.log("adding extra cell", cellCount);
-        }
+        var elements = []; //this.getElements(row, col, uncommitted, committed, cell, editorState);
+        var results = [];
 
-        for(var d=0;d<cellCount;d++) {
-            var elKey = cellKey+"."+d;
+        var setEditorToAdd = function() {
+                console.log("add", row, col);
+            controller.setElementFocus(row, col, cell.length);
+        };
 
-            if (elKey in pendingChanges) {
-                var pendingChange = pendingChanges[elKey];
-                elements.push(
-                    <div key={elKey} className="pending-change">
-                        {pendingChange}
-                    </div>
-                );
-            } else if(editorState.row == row && editorState.column == col && editorState.element == d) {
-                if(editorState.editorValue == null) {
-                    var element = cell[d];
-                    elements.push(
-                        <div key={elKey} className="table-focus">
-                            {element}
-                        </div>
-                    );
-                } else {
-                    elements.push(
-                        <ElementEditor key={elKey} value={pendingChange} onChange={controller.elementUpdated}/>
-                    );
-
-                }
-            } else {
-                var element = cell[d];
-                    //onClick={this.setElementFocus(i, col, d)}
-                elements.push(
-                    <div key={elKey} >
-                        {element}
-                    </div>
-                );
+        var mkSetEditorToEdit = function(elementIndex) {
+            return function() {
+                console.log("edit", row, col, elementIndex)
+                controller.setElementFocus(row, col, elementIndex);
             }
         }
 
-        return (
-            <td>
-                {elements}
-            </td>
-            );
+        if(elements.length == 0) {
+            // empty row.  Editing this will result in a new record
+            return (
+                <td onClick={setEditorToAdd}>
+                </td>
+                );
+        } else {
+            for(var i=0;i<elements.length;i++) {
+                var e = elements[i];
+                var elKey = "e"+i;
+
+                if(e.type == "editor") {
+                    results.push(
+                        <ElementEditor key="editor" value={editorState.editorValue} onChange={controller.elementUpdated}/>
+                    );
+                } else {
+                    var lastElement = (i == (elements.length-1));
+                    if(lastElement) {
+                        results.push(
+                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
+                                {e.value}
+                                <span className="add-button" onClick={setEditorToAdd}>+</span>
+                            </div>
+                        );
+                    } else {
+                        results.push(
+                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
+                                {e.value}
+                            </div>
+                        );
+                    }
+                }
+            }
+            return (
+                <td>
+                    {results}
+                </td>
+                );
+        }
     }
 });
 
@@ -92,12 +145,22 @@ var Table = React.createClass({
             this.props.controller.textEditorChanged(event.target.value);
         },
         setElementFocus: function(row, column, element) {
-             var controller = this.props.controller;
+            var controller = this.props.controller;
             return function(event) {
                 console.log("selected", row, column, element);
                 controller.setElementFocus(row, column, element);
                 event.stopPropagation();
             }
+        },
+        filterUpdates: function(instance, property, updates) {
+            var filtered = [];
+            for(var i=0;i<updates.length;i++) {
+                var r = updates[i];
+                if(r.instance == instance && r.property == property) {
+                    filtered.push(r);
+                }
+            }
+            return filtered;
         },
         render: function() {
             var editorState = this.props.editorState;
@@ -116,19 +179,26 @@ var Table = React.createClass({
 
             var rows = this.props.rows;
             var data = this.props.data;
+            var committed = this.props.committed;
+            var uncommitted = this.props.uncommitted;
 
             for(var i=0;i<rows.length;i++) {
 
                 var tableCells = [];
                 var row = data[i];
+                var instance = rows[i].id;
 
                 for(var col=0;col<row.length;col++) {
+                    var property = columns[i].id;
                     var cell = row[col];
                     var cellKey = "c"+i+"."+col;
 
-                    //onClick={this.setElementFocus(i, col, cell.length)}
+                    // only consider those records for this cell
+                    cellUncommitted = []; //this.filterUpdates(instance, property, uncommitted);
+                    cellCommitted = []; //this.filterUpdates(instance, property, committed);
+
                     tableCells.push(
-                        <TableCell key={cellKey} row={i} col={col} cell={cell} pendingChanges={pendingChanges} editorState={editorState} controller={this.props.controller}/>
+                        <TableCell key={cellKey} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
                     );
                 }
 
@@ -161,7 +231,7 @@ var TableCtl = React.createClass({
     },
     render: function() {
         return (
-            <Table columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} pendingChanges={this.state.pendingChanges} />
+            <Table columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} committed={this.state.pending} uncommitted={this.state.uncommitted} />
         );
     }
 });
@@ -202,30 +272,6 @@ function initTableTown(tableDivId) {
 
     var state = s;
     var editor = null;
-
-    var applyChange = function(state, row, column, element, newValue) {
-        if(newValue == "") {
-            // if empty, delete the element
-            var update1 = {$splice: [[element, 1]]};
-            var update2 = {};
-            update2[column] = update1;
-            var update3 = {};
-            update3[row] = {data: update2};
-            var fullUpdate = {rows: update3};
-        } else {
-            // otherwise, set the value
-            var update0 = {$set: newValue};
-            var update1 = {};
-            update1[element] = update0;
-            var update2 = {};
-            update2[column] = update1;
-            var update3 = {};
-            update3[row] = {data: update2};
-            var fullUpdate = {rows: update3};
-        }
-
-        return React.addons.update(state, fullUpdate);
-    };
 
     // Mock db
     var db = {
@@ -282,7 +328,8 @@ function initTableTown(tableDivId) {
             var oldEditorState = state.editorState;
             if(oldEditorState != null) {
                 // update the data matrix with the value from the editor
-                state = applyChange(state, oldEditorState.row, oldEditorState.column, oldEditorState.element, oldEditorState.editorValue);
+                // there should be an attempt to commit all outstanding changes
+                state = applyAddElement(state, oldEditorState.row, oldEditorState.column, oldEditorState.editorValue)
             }
 
             // now position the editor at the new element in the matrix
@@ -326,8 +373,8 @@ function initTableTown(tableDivId) {
         <TableCtl initialState={state} controller={controller}/>,
         document.getElementById(tableDivId));
 
+/*
     setInterval(function() {
-//        console.log("exec apply")
         db.queryUpdates(state.version).then(function(response) {
 
             if(state.version != response.txn) {
@@ -342,4 +389,5 @@ function initTableTown(tableDivId) {
             }
         });
    }, 1000);
+   */
 }
