@@ -1,7 +1,7 @@
 
 var ElementEditor = React.createClass({
-    componentDidMount:function() {
-        this.cancelled = false;
+    componentDidMount: function() {
+        React.findDOMNode(this).focus();
     },
     onBlur: function(event) {
         if(!this.cancelled) {
@@ -20,51 +20,6 @@ var ElementEditor = React.createClass({
 });
 
 var TableCell = React.createClass({
-    getElements: function(row, col, uncommitted, committed, cell, editorState) {
-        // first, merge pending operations with current to get elements
-        // if there are no elements, then clicking should open an editor at that position
-        // if there are elements, the last element should get a plus sign
-        // clicking an existing element should result in that element being edited (only for elements which are up-to-date.)
-        //      add "oldValue" to editorState to avoid problems with trying to edit value which has not yet committed?
-
-        var elements = [];
-
-        for(var d=0;d<cell.length;d++) {
-            if(editorState.row == row && editorState.column == col && editorState.element == d) {
-                elements.push({type:"editor", value: editorState.value});
-            } else {
-                elements.push({type:"data", value: cell[d]})
-            }
-        }
-
-        for(var i=0;i<committed.length;i++) {
-            var update = committed[i];
-            if(update.op == "DV") {
-                updateTypeForValue(update.value, "committed-deleted-data");
-            } else if(update.op == "AV"){
-                elements.push({type:"committed", value: update.value})
-            } else {
-                console.log("unknown op", update);
-            }
-        }
-
-        for(var i=0;i<uncommitted.length;i++) {
-            var update = uncommitted[i];
-            if(update.op == "DV") {
-                updateTypeForValue(update.value, "uncommitted-deleted-data");
-            } else if(update.op == "AV"){
-                elements.push({type:"uncommitted", value: update.value})
-            } else {
-                console.log("unknown op", update);
-            }
-        }
-
-        if(editorState.row == row && editorState.column == col && editorState.element >= cell.length ) {
-            elements.push({type:"editor", value: editorState.value})
-        }
-
-        return elements;
-    },
     render: function() {
         var controller = this.props.controller;
         var row = this.props.row;
@@ -76,16 +31,19 @@ var TableCell = React.createClass({
 
         var cellKey="c"+row+"."+col;
 
-        var elements = []; //this.getElements(row, col, uncommitted, committed, cell, editorState);
+        var elements = getCellElements(row, col, uncommitted, committed, cell, editorState);
         var results = [];
 
         var setEditorToAdd = function() {
                 console.log("add", row, col);
             controller.setElementFocus(row, col, cell.length);
+                console.log("stoop ev");
+                // TODO: FIXME: this is not working.  the outer element is still receiving the event for some reason?!?!?!
+                event.stopPropagation();
         };
 
         var mkSetEditorToEdit = function(elementIndex) {
-            return function() {
+            return function(event) {
                 console.log("edit", row, col, elementIndex)
                 controller.setElementFocus(row, col, elementIndex);
             }
@@ -104,7 +62,7 @@ var TableCell = React.createClass({
 
                 if(e.type == "editor") {
                     results.push(
-                        <ElementEditor key="editor" value={editorState.editorValue} onChange={controller.elementUpdated}/>
+                        <ElementEditor key="editor" value={editorState.value} onChange={function(value) { controller.updateEditorValue(value); controller.acceptEditorValue() } }/>
                     );
                 } else {
                     var lastElement = (i == (elements.length-1));
@@ -251,13 +209,6 @@ function mockUpdateProperty(id, property_id, values) {
 
 
 function initTableTown(tableDivId) {
-    var editorState = {
-        row: 1,
-        column: 2,
-        element: 0,
-        editorValue: "x"
-    }
-
     var s = emptyModel();
     s = applyAddProperty(s, "x")
     s = applyAddProperty(s, "y")
@@ -267,8 +218,6 @@ function initTableTown(tableDivId) {
     s = applyUpdate(s, {op: "AI", instance: "c"} )
     s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"00"} )
     //s = applyUpdate(s, {op: "AV", instance: "c", property:"x", value:"20"} )
-    s.editorState = editorState;
-    s.pendingChanges = {};
 
     var state = s;
     var editor = null;
@@ -322,56 +271,16 @@ function initTableTown(tableDivId) {
         }
     }
 
-    var controller = {
-
-        setElementFocus: function(row, column, element) {
-            var oldEditorState = state.editorState;
-            if(oldEditorState != null) {
-                // update the data matrix with the value from the editor
-                // there should be an attempt to commit all outstanding changes
-                state = applyAddElement(state, oldEditorState.row, oldEditorState.column, oldEditorState.editorValue)
-            }
-
-            // now position the editor at the new element in the matrix
-            var editorValue = "";
-            var cell = state.rows[row].data[column];
-            if(cell.length > element) {
-                editorValue = cell[element];
-            }
-
-            var newEditorState = {row: row, column: column, element: element, editorValue: editorValue};
-            state = React.addons.update(state, {editorState: {$set: newEditorState}})
-            editor.setState(state);
-        },
-        // can we drop this?
-        textEditorChanged: function(value) {
-            state = React.addons.update(state, {editorState: {editorValue: {$set: value}}})
-            editor.setState(state);
-        },
-        elementUpdated: function(value) {
-            var eState = state.editorState;
-            console.log("set element (", eState.row, ", ", eState.column, ", ", eState.element, ") to ", value);
-
-            var updates = [];
-            if(eState.element >= state.data[eState.row][eState.column].length) {
-                // this is a new element, so don't remove anything
-            } else {
-                // this is the replacement of an existing element
-                var oldValue = state.data[eState.row][eState.column][eState.element];
-                updates.push({op: "DV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: oldValue})
-            }
-            updates.push({op: "AV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: value})
-
-            db.update(updates).then(function(txn) {
-                state = applyCommitted(state, txn, updates);
-                console.log("updated state with committed", state);
-            });
-        }
-    };
+    var controller = new TableController(state, db);
 
     editor = React.render(
         <TableCtl initialState={state} controller={controller}/>,
         document.getElementById(tableDivId));
+
+    controller.addListener(function(state) {
+        console.log("updating editor with state", state);
+        editor.setState(state)
+        } );
 
 /*
     setInterval(function() {

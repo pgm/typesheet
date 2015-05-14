@@ -14,7 +14,14 @@ var emptyModel = function() {
         instanceToRow: {},
         propertyToColumn:{},
         pending: [],
-        uncommitted: []
+        uncommitted: [],
+        editorState: null
+//        {
+//            row: 1,
+//            column: 2,
+//            element: 0,
+//            editorValue: "x"
+//        }
         };
      return state;
 }
@@ -240,4 +247,144 @@ var applySyncComplete = function(state, newVersion) {
 
     var update = {version: {$set: newVersion}, pending: {$set: newPending}};
     return React.addons.update(state, update)
+}
+
+// controller
+
+function TableController(state, db) {
+    this.state = state;
+    this.stateListeners = [];
+    this.db = db;
+};
+
+TableController.prototype.setState = function(state) {
+    this.state = state;
+    for(var i=0;i<this.stateListeners.length;i++) {
+        this.stateListeners[i](state);
+    }
+}
+
+TableController.prototype.addListener = function(listener) {
+    this.stateListeners.push(listener);
+}
+
+TableController.prototype.setElementFocus = function(row, column, element) {
+    var state = this.state;
+    var oldEditorState = state.editorState;
+    if(oldEditorState != null) {
+        // update the data matrix with the value from the editor
+        // there should be an attempt to commit all outstanding changes
+        state = applyAddElement(this.state, oldEditorState.row, oldEditorState.column, oldEditorState.value)
+    }
+
+    // now position the editor at the new element in the matrix
+    var editorValue = "";
+    var cell = state.data[row][column];
+    if(cell.length > element) {
+        editorValue = cell[element];
+    }
+
+    var newEditorState = {row: row, column: column, element: element, value: editorValue};
+    state = React.addons.update(state, {editorState: {$set: newEditorState}})
+
+    this.setState(state);
+};
+
+TableController.prototype.updateEditorValue = function(value) {
+    var state = this.state;
+
+    state = React.addons.update(state, {editorState: {value: { $set: value} } })
+
+    this.setState(state);
+}
+
+TableController.prototype.acceptEditorValue = function() {
+    var state = this.state;
+    var eState = state.editorState;
+    var updates = [];
+
+    if(eState.element >= state.data[eState.row][eState.column].length) {
+        // this is a new element, so don't remove anything
+    } else {
+        // this is the replacement of an existing element
+        var oldValue = state.data[eState.row][eState.column][eState.element];
+        updates.push({op: "DV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: oldValue})
+    }
+
+    if(eState.value != "") {
+        updates.push({op: "AV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: eState.value})
+    }
+
+    var c = this;
+    this.db.update(updates).then(function(txn) {
+        var state = applyCommitted(c.state, txn, updates);
+        console.log("updated state with committed", state);
+        c.setState(state);
+    });
+
+    state = React.addons.update(state, {editorState: {$set: null}, uncommitted: {$push: updates } })
+
+    this.setState(state);
+}
+
+TableController.prototype.abortEdit = function() {
+    var update = {editorState: {$set: null}};
+    this.setState(React.addons.update(this.state, update));
+}
+
+getCellElements = function(row, col, uncommitted, committed, cell, editorState) {
+    // first, merge pending operations with current to get elements
+    // if there are no elements, then clicking should open an editor at that position
+    // if there are elements, the last element should get a plus sign
+    // clicking an existing element should result in that element being edited (only for elements which are up-to-date.)
+    //      add "oldValue" to editorState to avoid problems with trying to edit value which has not yet committed?
+
+    var elements = [];
+
+    for(var d=0;d<cell.length;d++) {
+        if(editorState != null && editorState.row == row && editorState.column == col && editorState.element == d) {
+            elements.push({type:"editor", value: editorState.value});
+        } else {
+            elements.push({type:"data", value: cell[d]})
+        }
+    }
+
+    for(var i=0;i<committed.length;i++) {
+        var update = committed[i];
+        if(update.op == "DV") {
+            updateTypeForValue(update.value, "committed-deleted-data");
+        } else if(update.op == "AV"){
+            elements.push({type:"committed", value: update.value})
+        } else {
+            console.log("unknown op", update);
+        }
+    }
+
+    for(var i=0;i<uncommitted.length;i++) {
+        var update = uncommitted[i];
+        if(update.op == "DV") {
+            //updateElementTypeForValue(elements, update.value, "uncommitted-deleted-data");
+            elements = dropElementWithValue(elements, update.value);
+        } else if(update.op == "AV"){
+            elements.push({type:"uncommitted", value: update.value})
+        } else {
+            console.log("unknown op", update);
+        }
+    }
+
+    if(editorState != null && editorState.row == row && editorState.column == col && editorState.element >= cell.length ) {
+        elements.push({type:"editor", value: editorState.value})
+    }
+
+    return elements;
+};
+
+dropElementWithValue = function(elements, value) {
+    var n = [];
+    for(var i=0;i<elements;i++) {
+        if(elements[i].value != value) {
+            n.push(elements[i]);
+        }
+    }
+    return n;
 }
