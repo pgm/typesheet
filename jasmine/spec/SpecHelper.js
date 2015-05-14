@@ -34,17 +34,17 @@ var findInconsistency = function(s) {
 
 
 beforeEach(function () {
-  jasmine.addMatchers({
-    toBeConsistent: function () {
-      return {
-        compare: function (actual) {
-          var message = findInconsistency(actual);
-          return {
-            pass: message == null,
-            message: message
-          };
+    jasmine.addMatchers({
+        toBeConsistent: function () {
+            return {
+                compare: function (actual) {
+                    var message = findInconsistency(actual);
+                    return {
+                        pass: message == null,
+                        message: message
+                    };
+                }
+            };
         }
-      };
-    }
-  });
+    });
 });
