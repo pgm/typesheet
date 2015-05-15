@@ -28,20 +28,42 @@ table.table-town th {
     width: 200px;
 }
 
+table.table-town td {
+    vertical-align: top;
+}
+
+table.table-town .uncommitted {
+    background-color: yellow;
+}
+
+table.table-town .committed {
+    background-color: yellowgreen;
+}
+
 table.table-town .add-button {
     background-color: transparent;
+    padding-top: 0px;
+    padding-bottom: 0px;
     padding-left: 5px;
     padding-right: 5px;
+    margin: 0px;
     color: transparent;
     float: right;
-}
+    border-spacing: 0px;
+    border-width: 0px;
+ }
 
 table.table-town .add-button:hover {
     background-color: lightgray;
+    padding-top: 0px;
+    padding-bottom: 0px;
     padding-left: 5px;
     padding-right: 5px;
+    margin: 0px;
     color: white;
     float: right;
     cursor: pointer;
     /* border-left: gray solid 1px; */
+    border-spacing: 0px;
+    border-color: transparent;
 }

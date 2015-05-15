@@ -312,24 +312,26 @@ TableController.prototype.acceptEditorValue = function () {
     var state = this.state;
     var eState = state.editorState;
     var updates = [];
+    var valuesMatch = false;
 
     if (eState.element >= state.data[eState.row][eState.column].length) {
         // this is a new element, so don't remove anything
     } else {
         // this is the replacement of an existing element
         var oldValue = state.data[eState.row][eState.column][eState.element];
-        updates.push({op: "DV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: oldValue})
+        valuesMatch = (oldValue == eState.value);
+        if(!valuesMatch) {
+            updates.push({op: "DV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: oldValue})
+        }
     }
 
-    if (eState.value != "") {
+    if (!valuesMatch && eState.value != "") {
         updates.push({op: "AV", instance: state.rows[eState.row].id, property: state.columns[eState.column].id, value: eState.value})
     }
 
     var c = this;
     this.db.update(updates).then(function (txn) {
-        var state = applyCommitted(c.state, txn, updates);
-        console.log("updated state with committed", state);
-        c.setState(state);
+        c.applyCommitted(txn, updates);
     });
 
     state = React.addons.update(state, {editorState: {$set: null}, uncommitted: {$push: updates } })
@@ -337,9 +339,29 @@ TableController.prototype.acceptEditorValue = function () {
     this.setState(state);
 }
 
+TableController.prototype.applyCommitted = function(txn, updates) {
+    var state = applyCommitted(this.state, txn, updates);
+    console.log("updated state with committed", state);
+    this.setState(state);
+};
+
 TableController.prototype.abortEdit = function () {
     var update = {editorState: {$set: null}};
     this.setState(React.addons.update(this.state, update));
+}
+
+TableController.prototype.applySync = function(txn, updates) {
+    var state = this.state;
+    if(state.version != txn) {
+        console.log("apply updates from server response ", txn, updates);
+        for(var i=0;i<updates.length;i++) {
+            console.log("apply updates from server", updates[i]);
+            state = applyUpdate(state, updates[i] )
+        }
+
+        state = applySyncComplete(state, txn);
+        this.setState(state);
+    }
 }
 
 getCellElements = function (row, col, uncommitted, committed, cell, editorState) {
@@ -362,7 +384,7 @@ getCellElements = function (row, col, uncommitted, committed, cell, editorState)
     for (var i = 0; i < committed.length; i++) {
         var update = committed[i];
         if (update.op == "DV") {
-            updateTypeForValue(update.value, "committed-deleted-data");
+            elements = dropElementWithValue(elements, update.value);
         } else if (update.op == "AV") {
             elements.push({type: "committed", value: update.value})
         } else {
@@ -373,7 +395,6 @@ getCellElements = function (row, col, uncommitted, committed, cell, editorState)
     for (var i = 0; i < uncommitted.length; i++) {
         var update = uncommitted[i];
         if (update.op == "DV") {
-            //updateElementTypeForValue(elements, update.value, "uncommitted-deleted-data");
             elements = dropElementWithValue(elements, update.value);
         } else if (update.op == "AV") {
             elements.push({type: "uncommitted", value: update.value})
@@ -391,10 +412,11 @@ getCellElements = function (row, col, uncommitted, committed, cell, editorState)
 
 dropElementWithValue = function (elements, value) {
     var n = [];
-    for (var i = 0; i < elements; i++) {
+    for (var i = 0; i < elements.length; i++) {
         if (elements[i].value != value) {
             n.push(elements[i]);
         }
     }
+    console.log("dropElementWithValue", elements, value, "->", n);
     return n;
 }

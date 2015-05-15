@@ -32,6 +32,10 @@ var TableCell = React.createClass({
         var cellKey="c"+row+"."+col;
 
         var elements = getCellElements(row, col, uncommitted, committed, cell, editorState);
+        if(row == 0 && col == 0) {
+            console.log("getCellElements state: ", this.props);
+            console.log("getCellElements elements: ", elements);
+        }
         var results = [];
 
         var setEditorToAdd = function() {
@@ -49,6 +53,12 @@ var TableCell = React.createClass({
             }
         }
 
+        var applyValue = function(value) {
+            controller.updateEditorValue(value);
+            controller.acceptEditorValue();
+            console.log("after apply value", controller.state);
+        }
+
         if(elements.length == 0) {
             // empty row.  Editing this will result in a new record
             return (
@@ -62,26 +72,35 @@ var TableCell = React.createClass({
 
                 if(e.type == "editor") {
                     results.push(
-                        <ElementEditor key="editor" value={editorState.value} onChange={function(value) { controller.updateEditorValue(value); controller.acceptEditorValue() } }/>
+                        <ElementEditor key="editor" value={editorState.value} onChange={applyValue}/>
                     );
                 } else {
                     var lastElement = (i == (elements.length-1));
+                    var className = "";
+                    if(e.type == "uncommitted") {
+                        className = "uncommitted";
+                    } else if(e.type == "committed") {
+                        className = "committed";
+                    }
+
                     if(lastElement) {
+//                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
                         results.push(
-                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
+                            <div key={elKey} className={className}>
                                 {e.value}
-                                <span className="add-button" onClick={setEditorToAdd}>+</span>
+                                <button className="add-button" onClick={setEditorToAdd}>+</button>
                             </div>
                         );
                     } else {
                         results.push(
-                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
+                            <div key={elKey} onClick={mkSetEditorToEdit(i)} className={className}>
                                 {e.value}
                             </div>
                         );
                     }
                 }
             }
+
             return (
                 <td>
                     {results}
@@ -115,6 +134,7 @@ var Table = React.createClass({
             for(var i=0;i<updates.length;i++) {
                 var r = updates[i];
                 if(r.instance == instance && r.property == property) {
+                    console.log("match", r.instance, instance, r.property, property);
                     filtered.push(r);
                 }
             }
@@ -147,13 +167,13 @@ var Table = React.createClass({
                 var instance = rows[i].id;
 
                 for(var col=0;col<row.length;col++) {
-                    var property = columns[i].id;
+                    var property = columns[col].id;
                     var cell = row[col];
                     var cellKey = "c"+i+"."+col;
 
                     // only consider those records for this cell
-                    cellUncommitted = []; //this.filterUpdates(instance, property, uncommitted);
-                    cellCommitted = []; //this.filterUpdates(instance, property, committed);
+                    cellUncommitted = this.filterUpdates(instance, property, uncommitted);
+                    cellCommitted = this.filterUpdates(instance, property, committed);
 
                     tableCells.push(
                         <TableCell key={cellKey} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
@@ -188,6 +208,7 @@ var TableCtl = React.createClass({
         return this.props.initialState;
     },
     render: function() {
+        console.log("TableCtl.render", this.state);
         return (
             <Table columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} committed={this.state.pending} uncommitted={this.state.uncommitted} />
         );
@@ -239,7 +260,6 @@ function initTableTown(tableDivId) {
             return promise;
         },
         queryUpdates: function(afterTxn) {
-//            console.log("queryUpdates", afterTxn, db.transactions);
             var updates = [];
             for(var i=0;i<db.transactions.length;i++){
                 var u = db.transactions[i];
@@ -254,7 +274,7 @@ function initTableTown(tableDivId) {
             }
 
             if(updates.length > 0){
-            console.log(" queryUpdates update", updates);
+                console.log(" queryUpdates(",afterTxn," update", updates);
             }
 
             var latestTxn = db.txnId;
@@ -282,21 +302,10 @@ function initTableTown(tableDivId) {
         editor.setState(state)
         } );
 
-/*
     setInterval(function() {
-        db.queryUpdates(state.version).then(function(response) {
-
-            if(state.version != response.txn) {
-                console.log("apply updates from server response ", response);
-                var updates = response.ops;
-                for(var i=0;i<updates.length;i++) {
-                    console.log("apply updates from server", updates[i]);
-                    state = applyUpdate(state, updates[i] )
-                }
-                state = applySyncComplete(state, response.txn);
-                editor.setState(state);
-            }
+        db.queryUpdates(controller.state.version).then(function(response) {
+            controller.applySync(response.txn, response.ops);
         });
    }, 1000);
-   */
+
 }
