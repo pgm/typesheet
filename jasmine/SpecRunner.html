@@ -11,15 +11,16 @@
   <script src="lib/jasmine-2.3.0/jasmine-html.js"></script>
   <script src="lib/jasmine-2.3.0/boot.js"></script>
 
-  <!-- include source files here... -->
-  <script src="src/Player.js"></script>
-  <script src="src/Song.js"></script>
 
   <!-- include spec files here... -->
   <script src="spec/SpecHelper.js"></script>
   <script src="spec/TableModelSpec.js"></script>
 
   <script src="../static/react-with-addons-0.13.2/react-with-addons-0.13.2.js"></script>
+    <script>
+        // giant hack. TODO: figure out the right way to handle "require"
+        var realReactRef = React; var require=function(n) { return realReactRef } </script>
+  <script src="../static/ts/first.js"></script>
   <script src="../static/tablemodel.js"></script>
 
 </head>

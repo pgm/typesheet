@@ -1,3 +1,36 @@
+//describe("TableTypes", function () {
+//    var c;
+//
+//    beforeEach(function () {
+//        var s = emptyModel();
+//        var mockDb = {update: function () {
+//            return new Promise(function (s, f) {
+//            });
+//        } };
+//
+//        c = new TableController(s, mockDb);
+//    });
+//
+//    it("looks up element names for custom types", function() {
+//       var namePropDef = {
+//                id: "prop",
+//                name: "Prop",
+//                description: "PropDescription",
+//                expectedTypeId: "custom",
+//                reversePropertyId: null,
+//                isUnique: false
+//            };
+//        c.setState(addToTypeCache(c.state, [], [namePropDef]));
+//        c.setState(applyAddProperty(c.state, "prop"));
+//        c.setState(applyUpdate(c.state, {op: "AI", instance: "a"}));
+//        c.setState(applyUpdate(c.state, {op: "AV", instance: "a", property: "prop", value: "B"}));
+//        c.setState(updateInstancesForType(c.state, "custom", [{id: "A", name: "NameA"}, {id: "B", name: "NameB"}]))
+//
+//        var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
+//        expect(els).toEqual([{type: "data", value: "NameB"}]);
+//    });
+//});
+
 describe("TableController", function () {
     var c;
 
@@ -16,7 +49,7 @@ describe("TableController", function () {
         c = new TableController(s, mockDb);
     });
 
-        it("updates an earlier value shows the right number of elements", function() {
+    it("updates an earlier value shows the right number of elements", function() {
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "0"})
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "1"})
 
@@ -38,10 +71,10 @@ describe("TableController", function () {
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
         expect(els).toEqual([{type: "data", value: "1"}, {type: "data", value: "2"}]);
     })
-
 });
 
-describe("TableController", function () {
+
+describe("TableController2", function () {
     var c;
 
     beforeEach(function () {
@@ -57,6 +90,31 @@ describe("TableController", function () {
         } };
 
         c = new TableController(s, mockDb);
+    });
+
+    it("clicking on an empty row results in creating a new instance", function() {
+        c.setElementFocus(2, 0, 0);
+
+        var elements = getCellElements(2, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
+        expect(elements).toEqual([
+            {type: "editor", value: ""}
+        ])
+
+        c.updateEditorValue("value");
+        c.acceptEditorValue();
+        expect(c.state).toBeConsistent();
+        expect(c.state.rows.length).toBe(3);
+
+        var newInstance = c.state.rows[2];
+
+        expect(c.state.uncommitted).toEqual([
+            {op: "AV", instance: newInstance, property: "x", value: "value"}
+        ]);
+
+        var elements = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
+        expect(elements).toEqual([
+            {type: "uncommitted", value: "value"}
+        ])
     });
 
     it("clicking on empty cell results in adding element", function () {
@@ -189,6 +247,44 @@ describe("TableController", function () {
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
         expect(els).toEqual([{type: "data", value: "1"}, {type: "data", value: "2"}]);
     })
+
+    it("can import from 'type' query", function() {
+        var thingTypeDef = {
+            id: "Core/Thing",
+            name: "Thing",
+            description: "Thing Description",
+            includedTypeIds: [],
+            propertyIds: ["Core/Thing/Name"],
+            nameIsUnique: true
+            };
+
+        var namePropDef = {
+            id: "Core/Thing/Name",
+            name: "Name",
+            description: "Description",
+            expectedTypeId: "Core/String",
+            reversePropertyId: null,
+            isUnique: false
+        };
+
+        var response = {
+            types: [thingTypeDef],
+            properties: [namePropDef],
+            txnId: 10,
+            rowIds: ["a", "b"],
+            rows: [
+                [["name1"]],
+                [["name2"]]
+            ]
+        };
+
+        c.setState(emptyModel());
+        c.loadFromQueryTypeResponse(response);
+        var s = c.state;
+        expect(s.version).toBe(10);
+        expect(s.data).toEqual([[["name1"]],[["name2"]]]);
+        expect(s).toBeConsistent();
+    });
 
     it("shows the right number of elements", function () {
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "0"})

@@ -10,22 +10,22 @@ var findInconsistency = function(s) {
     }
 
     for(var k in s.instanceToRow) {
-        if(k != s.rows[ s.instanceToRow[k] ].id )
+        if(k != s.rows[ s.instanceToRow[k] ] )
             return "row -> instanceToRow -> row mismatch";
     }
 
     for(var k in s.propertyToColumn) {
-        if(k != s.columns[ s.propertyToColumn[k] ].id )
+        if(k != s.columns[ s.propertyToColumn[k] ] )
             return "column -> instanceToColumn -> column mismatch";
     }
 
     for(var i=0;i<s.columns.length;i++) {
-        if(i != s.propertyToColumn[ s.columns[i].id ])
+        if(i != s.propertyToColumn[ s.columns[i] ])
             return "propertyToColumn -> column -> propertyToColumn mismatch";
     }
 
     for(var i=0;i<s.rows.length;i++) {
-        if(i != s.instanceToRow[ s.rows[i].id ])
+        if(i != s.instanceToRow[ s.rows[i] ])
             return "instanceToRow -> row -> instanceToRow";
     }
 

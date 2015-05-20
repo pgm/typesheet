@@ -67,3 +67,19 @@ table.table-town .add-button:hover {
     border-spacing: 0px;
     border-color: transparent;
 }
+
+ul.tt-autocomplete  {
+    position: absolute;
+    background-color: white;
+    border: solid black 1px;
+    padding: 1px;
+}
+.tt-autocomplete li {
+        display: block;
+}
+
+.tt-autocomplete li:hover {
+    background-color: lightgray;
+        cursor: pointer;
+
+}

@@ -1,4 +1,3 @@
-
 var ElementEditor = React.createClass({
     componentDidMount: function() {
         React.findDOMNode(this).focus();
@@ -14,20 +13,53 @@ var ElementEditor = React.createClass({
         return (
             <div className="pending-change" contentEditable="true" onBlur={this.onBlur}>
                 {this.props.value}
+
             </div>
             );
     }
 });
+
+var ElementEditorSelection = React.createClass({
+    mkSelectOption: function(newValue) {
+        var onChange = this.props.onChange;
+        return function() {
+            onChange(newValue);
+        }
+    },
+    render: function() {
+        var optionsNodes = [];
+        var options = this.props.options;
+        console.log("options", options);
+        for(var i=0;i<options.length;i++) {
+            var option = options[i];
+            optionsNodes.push(
+                <li onClick={this.mkSelectOption(option.value)}>{option.text}</li>
+            );
+        }
+
+        return (
+            <div>
+                <input type="text" value={this.props.value}/>
+                <ul className="tt-autocomplete">
+                    {optionsNodes}
+                </ul>
+            </div>
+            );
+    }
+});
+
 
 var TableCell = React.createClass({
     render: function() {
         var controller = this.props.controller;
         var row = this.props.row;
         var col = this.props.col;
+        var column = this.props.column;
         var cell = this.props.cell;
         var editorState = this.props.editorState;
         var uncommitted = this.props.uncommitted;
         var committed = this.props.committed;
+        var cache = this.props.cache;
 
         var cellKey="c"+row+"."+col;
 
@@ -71,9 +103,16 @@ var TableCell = React.createClass({
                 var elKey = "e"+i;
 
                 if(e.type == "editor") {
-                    results.push(
-                        <ElementEditor key="editor" value={editorState.value} onChange={applyValue}/>
-                    );
+                    if(editorState.options) {
+                        console.log("adding option editor")
+                        results.push(
+                            <ElementEditorSelection key="editor" value={editorState.value} options={editorState.options} onChange={applyValue} />
+                        );
+                    } else {
+                        results.push(
+                            <ElementEditor key="editor" value={editorState.value} onChange={applyValue}/>
+                        );
+                    }
                 } else {
                     var lastElement = (i == (elements.length-1));
                     var className = "";
@@ -83,18 +122,20 @@ var TableCell = React.createClass({
                         className = "committed";
                     }
 
+                    var value = formatValueForDisplay(column, cache, e.value);
+
                     if(lastElement) {
 //                            <div key={elKey} onClick={mkSetEditorToEdit(i)}>
                         results.push(
                             <div key={elKey} className={className}>
-                                {e.value}
+                                {value}
                                 <button className="add-button" onClick={setEditorToAdd}>+</button>
                             </div>
                         );
                     } else {
                         results.push(
                             <div key={elKey} onClick={mkSetEditorToEdit(i)} className={className}>
-                                {e.value}
+                                {value}
                             </div>
                         );
                     }
@@ -147,11 +188,16 @@ var Table = React.createClass({
             var tableRows = [];
 
             var headerCells = [];
+            var colTags = [];
             var columns = this.props.columns;
             for(var i=0;i<columns.length;i++) {
                 var key="h"+i;
+                var colKey="c"+i;
                 headerCells.push(
                     <th key={key} className="table-town">{columns[i].name}</th>
+                );
+                colTags.push(
+                    <col key={colKey} />
                 );
             }
 
@@ -159,9 +205,9 @@ var Table = React.createClass({
             var data = this.props.data;
             var committed = this.props.committed;
             var uncommitted = this.props.uncommitted;
+            var cache = this.props.cache;
 
             for(var i=0;i<rows.length;i++) {
-
                 var tableCells = [];
                 var row = data[i];
                 var instance = rows[i].id;
@@ -176,7 +222,7 @@ var Table = React.createClass({
                     cellCommitted = this.filterUpdates(instance, property, committed);
 
                     tableCells.push(
-                        <TableCell key={cellKey} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
+                        <TableCell key={cellKey} cache={cache} column={columns[col]} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
                     );
                 }
 
@@ -188,8 +234,28 @@ var Table = React.createClass({
                 )
             }
 
+            // add one extra line which is used for entering new records
+            var tableCells = [];
+            for(var col=0;col<columns.length;col++) {
+                var property = columns[col].id;
+                var cellKey = "ce"+col;
+
+                tableCells.push(
+                    <TableCell key={cellKey} cache={cache} column={columns[col]} row={rows.length} col={col} cell={[]} uncommitted={[]} committed={[]} editorState={editorState} controller={this.props.controller}/>
+                );
+            }
+            var rowKey = "re";
+            tableRows.push(
+                <tr key={rowKey}>
+                    {tableCells}
+                </tr>
+            )
+
             return (
                 <table className="table-town">
+                    <colgroup>
+                        {colTags}
+                    </colgroup>
                     <thead>
                         <tr>
                             {headerCells}
@@ -202,15 +268,31 @@ var Table = React.createClass({
             );
         }
     });
+/*
+var PropertySelector = React.createClass({
+    render: function() {
+        this.prop.cache;
+
+        var typesDivs = [];
+        for(var i=0;i<;i++) {
+
+        }
+    }
+})
+*/
 
 var TableCtl = React.createClass({
     getInitialState: function() {
-        return this.props.initialState;
+        return emptyModel();
     },
     render: function() {
         console.log("TableCtl.render", this.state);
+//                <PropertySelector controller={this.props.controller} cache={this.state.cache} />
+
         return (
-            <Table columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} committed={this.state.pending} uncommitted={this.state.uncommitted} />
+            <div>
+                <Table cache={this.state.cache} columns={this.state.columns} data={this.state.data} rows={this.state.rows} editorState={this.state.editorState} controller={this.props.controller} committed={this.state.pending} uncommitted={this.state.uncommitted} />
+            </div>
         );
     }
 });
@@ -227,26 +309,81 @@ function mockUpdateProperty(id, property_id, values) {
 }
 
 
-
-
 function initTableTown(tableDivId) {
-    var s = emptyModel();
-    s = applyAddProperty(s, "x")
-    s = applyAddProperty(s, "y")
-    s = applyAddProperty(s, "z")
-    s = applyUpdate(s, {op: "AI", instance: "a"} )
-    s = applyUpdate(s, {op: "AI", instance: "b"} )
-    s = applyUpdate(s, {op: "AI", instance: "c"} )
-    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"00"} )
+//    var s = ;
+//    s = applyAddProperty(s, "x")
+//    s = applyAddProperty(s, "y")
+//    s = applyAddProperty(s, "z")
+//    s = applyUpdate(s, {op: "AI", instance: "a"} )
+//    s = applyUpdate(s, {op: "AI", instance: "b"} )
+//    s = applyUpdate(s, {op: "AI", instance: "c"} )
+//    s = applyUpdate(s, {op: "AV", instance: "a", property:"x", value:"00"} )
     //s = applyUpdate(s, {op: "AV", instance: "c", property:"x", value:"20"} )
 
-    var state = s;
+//    var state = s;
     var editor = null;
 
     // Mock db
     var db = {
         txnId: 1,
         transactions: [],
+        queryType: function(typeId) {
+            var thingTypeDef = {
+                id: "Core/Thing",
+                name: "Thing",
+                description: "Thing Description",
+                includedTypeIds: [],
+                propertyIds: ["Core/Thing/Name"],
+                nameIsUnique: true
+                };
+
+            var extraTypeDef = {
+                id: typeId,
+                name: "name",
+                description: "description",
+                includedTypeIds: ["Core/Thing"],
+                propertyIds: ["word"],
+                nameIsUnique: true
+                };
+
+            var namePropDef = {
+                id: "Core/Thing/Name",
+                name: "Name",
+                description: "Description",
+                expectedTypeId: "Core/String",
+                reversePropertyId: null,
+                isUnique: false
+            };
+
+            var wordPropDef = {
+                id: "word",
+                name: "Word",
+                description: "Description",
+                expectedTypeId: "Core/String",
+                reversePropertyId: null,
+                isUnique: false
+            };
+
+            var response = {
+                types: [thingTypeDef, extraTypeDef],
+                properties: [namePropDef, wordPropDef],
+                txn: 1,
+                rowIds: ["a", "b"],
+                rows: [
+                    [["name1"], ["blue","brown"]],
+                    [["name2"], ["green"]]
+                ]
+            };
+
+            var promise = new Promise(function(resolve, reject){
+                // after 1 second return response
+                setTimeout(function(){
+                    resolve(response);
+                }, 1000);
+            });
+
+            return promise;
+        },
         update: function(ops) {
             var promise = new Promise(function(resolve, reject){
                 // after 1 second report transaction id
@@ -291,16 +428,29 @@ function initTableTown(tableDivId) {
         }
     }
 
-    var controller = new TableController(state, db);
+    var controller = new TableController(emptyModel(), db);
 
     editor = React.render(
-        <TableCtl initialState={state} controller={controller}/>,
+        <TableCtl controller={controller}/>,
         document.getElementById(tableDivId));
 
     controller.addListener(function(state) {
         console.log("updating editor with state", state);
         editor.setState(state)
         } );
+
+    db.queryType("extraType").then(function(response){
+        controller.loadFromQueryTypeResponse(response);
+        var es = {
+            row: 0,
+            column: 0,
+            element: 0,
+            editorValue: "x",
+            options:[ {text: "Abc", value: "abc"}, {text: "baaaah", value: "2"} ]
+        }
+
+        controller.setState(React.addons.update(controller.state, {editorState: {$set: es}}));
+    });
 
     setInterval(function() {
         db.queryUpdates(controller.state.version).then(function(response) {
