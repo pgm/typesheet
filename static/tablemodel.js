@@ -203,7 +203,7 @@ TableController.prototype.loadFromQueryTypeResponse = function(response) {
     for(var i=0;i<response.properties.length;i++) {
         var p = response.properties[i];
         propIds.push(p.id);
-        s = applyAddProperty(s, p.id);
+        s = applyAddProperty(s, p);
     }
 
     for(var i=0;i<response.rowIds.length;i++) {
@@ -267,7 +267,7 @@ formatValueForDisplay = function(propertyId, cache, value) {
     if(propDef.expectedTypeId == "Core/String") {
         return value;
     } else {
-        var instance = cache.instancesByType[type][value];
+        var instance = cache.instancesByType[propDef.expectedTypeId][value];
         return instance.name;
     }
 }

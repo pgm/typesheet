@@ -183,6 +183,7 @@ var Table = React.createClass({
         },
         render: function() {
             var editorState = this.props.editorState;
+            var cache = this.props.cache;
             var pendingChanges = this.props.pendingChanges;
 
             var tableRows = [];
@@ -193,8 +194,9 @@ var Table = React.createClass({
             for(var i=0;i<columns.length;i++) {
                 var key="h"+i;
                 var colKey="c"+i;
+                var propName = cache.properties[columns[i]].name;
                 headerCells.push(
-                    <th key={key} className="table-town">{columns[i].name}</th>
+                    <th key={key} className="table-town">{propName}</th>
                 );
                 colTags.push(
                     <col key={colKey} />
@@ -205,15 +207,14 @@ var Table = React.createClass({
             var data = this.props.data;
             var committed = this.props.committed;
             var uncommitted = this.props.uncommitted;
-            var cache = this.props.cache;
 
             for(var i=0;i<rows.length;i++) {
                 var tableCells = [];
                 var row = data[i];
-                var instance = rows[i].id;
+                var instance = rows[i];
 
                 for(var col=0;col<row.length;col++) {
-                    var property = columns[col].id;
+                    var property = columns[col];
                     var cell = row[col];
                     var cellKey = "c"+i+"."+col;
 
@@ -222,7 +223,7 @@ var Table = React.createClass({
                     cellCommitted = this.filterUpdates(instance, property, committed);
 
                     tableCells.push(
-                        <TableCell key={cellKey} cache={cache} column={columns[col]} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
+                        <TableCell key={cellKey} cache={cache} column={property} row={i} col={col} cell={cell} uncommitted={cellUncommitted} committed={cellCommitted} editorState={editorState} controller={this.props.controller}/>
                     );
                 }
 
@@ -237,7 +238,7 @@ var Table = React.createClass({
             // add one extra line which is used for entering new records
             var tableCells = [];
             for(var col=0;col<columns.length;col++) {
-                var property = columns[col].id;
+                var property = columns[col];
                 var cellKey = "ce"+col;
 
                 tableCells.push(

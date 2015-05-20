@@ -227,7 +227,7 @@ var applyDelInstance = function (state : TableState, instance : string) : TableS
     return React.addons.update(state, update);
 }
 
-var applyAddProperty = function (state : TableState, property : string) : TableState {
+var applyAddProperty = function (state : TableState, property : PropDef) : TableState {
     var appendColumn = {}
     for (var i = 0; i < state.data.length; i++) {
         appendColumn[i] = {$push: [
@@ -235,11 +235,19 @@ var applyAddProperty = function (state : TableState, property : string) : TableS
         ]};
     }
 
-    var update = {data: appendColumn, propertyToColumn: setMapValueStruct(property, state.columns.length), columns: {$push: [
-        property
-    ]}}
+    var propMap = {}
+    propMap[property.id] = property;
 
-    return React.addons.update(state, update)
+    var update = {data: appendColumn,
+        propertyToColumn: setMapValueStruct(property.id, state.columns.length),
+        columns: {$push: [
+            property.id
+           ]},
+        cache: {properties: {$merge: propMap}}};
+
+    var state = <TableState>React.addons.update(state, update)
+    console.log("applyAddProperty", state);
+    return state;
 }
 
 var applyDelProperty = function (state : TableState, property : string) : TableState {

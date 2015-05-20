@@ -23,6 +23,10 @@
     <![endif]-->
 
     <script src="http://fb.me/react-with-addons-0.13.1.js"></script>
+    <script>
+        // giant hack. TODO: figure out the right way to handle "require"
+        var realReactRef = React; var require=function(n) { return realReactRef } </script>
+    <script src="../static/ts/first.js"></script>
     <script src="/static/tabletown.js"></script>
     <script src="/static/tablemodel.js"></script>
     {% endblock %}
