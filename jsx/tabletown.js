@@ -26,6 +26,10 @@ var ElementEditorSelection = React.createClass({
             onChange(newValue);
         }
     },
+    updateSearchTest: function(event) {
+        var value = event.target.value
+        this.props.onSearchTextChange(value);
+    },
     render: function() {
         var optionsNodes = [];
         var options = this.props.options;
@@ -33,13 +37,13 @@ var ElementEditorSelection = React.createClass({
         for(var i=0;i<options.length;i++) {
             var option = options[i];
             optionsNodes.push(
-                <li onClick={this.mkSelectOption(option.value)}>{option.text}</li>
+                <li key={"o"+i} onClick={this.mkSelectOption(option.value)}>{option.text}</li>
             );
         }
 
         return (
             <div>
-                <input type="text" value={this.props.value}/>
+                <input type="text" value={this.props.searchText} onChange={this.updateSearchText} />
                 <ul className="tt-autocomplete">
                     {optionsNodes}
                 </ul>
@@ -105,8 +109,11 @@ var TableCell = React.createClass({
                 if(e.type == "editor") {
                     if(editorState.options) {
                         console.log("adding option editor")
+                        var onSearchTextChange = function(value) {
+                            controller.searchTextUpdated(value);
+                        }
                         results.push(
-                            <ElementEditorSelection key="editor" value={editorState.value} options={editorState.options} onChange={applyValue} />
+                            <ElementEditorSelection key="editor" value={editorState.value} options={editorState.options} onChange={applyValue} onSearchTextChange={onSearchTextChange} />
                         );
                     } else {
                         results.push(
@@ -338,12 +345,21 @@ function initTableTown(tableDivId) {
                 nameIsUnique: true
                 };
 
-            var extraTypeDef = {
-                id: typeId,
+            var sampleTypeDef = {
+                id: "sampleType",
                 name: "name",
                 description: "description",
                 includedTypeIds: ["Core/Thing"],
-                propertyIds: ["word"],
+                propertyIds: ["sampleType/color"],
+                nameIsUnique: true
+                };
+
+            var colorTypeDef = {
+                id: "color",
+                name: "name",
+                description: "description",
+                includedTypeIds: ["Core/Thing"],
+                propertyIds: [],
                 nameIsUnique: true
                 };
 
@@ -356,25 +372,60 @@ function initTableTown(tableDivId) {
                 isUnique: false
             };
 
-            var wordPropDef = {
-                id: "word",
-                name: "Word",
+            var colorPropDef = {
+                id: "sampleType/color",
+                name: "Color",
                 description: "Description",
-                expectedTypeId: "Core/String",
+                expectedTypeId: "color",
                 reversePropertyId: null,
                 isUnique: false
             };
 
-            var response = {
-                types: [thingTypeDef, extraTypeDef],
-                properties: [namePropDef, wordPropDef],
-                txn: 1,
-                rowIds: ["a", "b"],
-                rows: [
-                    [["name1"], ["blue","brown"]],
-                    [["name2"], ["green"]]
-                ]
-            };
+            var thingTypeDef = {
+                id: "Core/Thing",
+                name: "Thing",
+                description: "Thing Description",
+                includedTypeIds: [],
+                propertyIds: ["Core/Thing/Name"],
+                nameIsUnique: true
+                };
+
+
+            var response = null;
+
+            if(typeId == "sampleType") {
+                response = {
+                    types: [thingTypeDef, sampleTypeDef],
+                    properties: [namePropDef, wordPropDef],
+                    txn: 1,
+                    rowIds: ["a", "b"],
+                    rows: [
+                        [["name1"], ["BLUE","RED"]],
+                        [["name2"], ["GREEN"]]
+                    ]
+                };
+            } else if(typeId == "color") {
+                response = {
+                    types: [thingTypeDef, colorTypeDef],
+                    properties: [namePropDef],
+                    txn: 1,
+                    rowIds: ["RED", "BLUE", "GREEN"],
+                    rows: [
+                        [["Red"]],
+                        [["Blue"]],
+                        [["Green"]]
+                    ]
+                };
+            }
+
+            if(response == null) {
+                var promise = new Promise(function(resolve, reject){
+                    setTimeout(function(){
+                        reject("No such type: "+typeId);
+                    }, 1000);
+                });
+                return promise;
+            }
 
             var promise = new Promise(function(resolve, reject){
                 // after 1 second return response
@@ -440,17 +491,8 @@ function initTableTown(tableDivId) {
         editor.setState(state)
         } );
 
-    db.queryType("extraType").then(function(response){
+    db.queryType("sampleType").then(function(response){
         controller.loadFromQueryTypeResponse(response);
-        var es = {
-            row: 0,
-            column: 0,
-            element: 0,
-            editorValue: "x",
-            options:[ {text: "Abc", value: "abc"}, {text: "baaaah", value: "2"} ]
-        }
-
-        controller.setState(React.addons.update(controller.state, {editorState: {$set: es}}));
     });
 
     setInterval(function() {

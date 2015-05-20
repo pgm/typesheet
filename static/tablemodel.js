@@ -16,11 +16,6 @@ var getInstancesForType = function(state, typeId) {
     return instances;
 }
 
-
-
-
-
-
 // controller
 
 function TableController(state, db) {
@@ -58,11 +53,35 @@ TableController.prototype.setElementFocus = function (row, column, element) {
         }
     }
 
-    var newEditorState = {row: row, column: column, element: element, value: editorValue};
+    var options;
+    var propertyId = state.columns[column];
+    var propDef = state.cache.properties[propertyId];
+    if(propDef.expectedTypeId == "Core/String") {
+        options = null;
+    } else {
+        // find all the instances with for the given type
+        var instanceIds = state.cache.instanceIdsByType[propDef.expectedTypeId];
+        // look up each one and add it as an option
+        options = [];
+        for(var i=0;i<options.length;i++) {
+            var id = instanceIds[i];
+            var text = state.cache.instanceNames[i];
+
+            options.push({value: id, text: text})
+        }
+        console.log("got options for ", propDef.expectedTypeId, ": ", options);
+    }
+    [ {text: "Abc", value: "abc"}, {text: "baaaah", value: "2"} ];
+    var newEditorState = {row: row, column: column, element: element, value: editorValue, searchText: "", options: options};
     state = React.addons.update(state, {editorState: {$set: newEditorState}})
 
     this.setState(state);
 };
+
+TableController.prototype.searchTextUpdated = function (value) {
+    var state = React.addons.update(this.state, {editorState: {searchText: { $set: value} } });
+    this.setState(state);
+}
 
 TableController.prototype.updateEditorValue = function (value) {
     var state = this.state;
@@ -194,26 +213,60 @@ var importData = function(state, txnId, rowIds, propertyIds, rows) {
 }
 
 
-TableController.prototype.loadFromQueryTypeResponse = function(response) {
-    var s = this.state;
+
+TableController.prototype.loadFromQueryTypeResponse = function(typeId, response) {
+    var c = this;
+
+    var s = c.state;
     s = addToTypeCache(s, response.types, response.properties);
+    c.setState(s);
 
-    // show all properties by default?
-    var propIds = [];
-    for(var i=0;i<response.properties.length;i++) {
-        var p = response.properties[i];
-        propIds.push(p.id);
-        s = applyAddProperty(s, p);
+    var typeDef = s.cache.types[typeId];
+
+    var populateInstanceNames = function(response) {
+        var s = c.state;
+        s = addToTypeCache(s, response.types, response.properties);
+        var names = [];
+        for(var i=0;i<response.rows.length;i++) {
+            names.push(response.rows[i][0]);
+        }
+        s = addToInstanceNameCache(s, response.rowIds, names);
+        c.setState(s);
     }
 
-    for(var i=0;i<response.rowIds.length;i++) {
-        var id = response.rowIds[i];
-        s = applyAddInstance(s, id);
+    var enumLoads = [];
+    for(var i=0;i<typeDef.propertyIds.length;i++) {
+        var propertyId = typeDef.propertyIds[i];
+        var property = c.cache.properties[propertyId];
+        if(property.expectedType != "Core/String") {
+            enumLoads.push(c.db.queryType(property.expectedType).then(populateInstanceNames));
+        }
     }
 
-    s = importData(s, response.txnId, response.rowIds, propIds, response.rows);
+    var updateStateWithData = function()
+    {
+        var s = c.state;
 
-    this.setState(s);
+        // show all properties by default?
+        var propIds = [];
+        for(var i=0;i<response.properties.length;i++) {
+            var p = response.properties[i];
+            propIds.push(p.id);
+            s = applyAddProperty(s, p);
+        }
+
+        for(var i=0;i<response.rowIds.length;i++) {
+            var id = response.rowIds[i];
+            s = applyAddInstance(s, id);
+        }
+
+        s = importData(s, response.txnId, response.rowIds, propIds, response.rows);
+
+        c.setState(s);
+    };
+
+    Promise.all(enumLoads).then(updateStateWithData);
+
 }
 
 getCellElements = function (row, col, uncommitted, committed, cell, editorState) {

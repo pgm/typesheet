@@ -46,23 +46,25 @@ interface StrToIndex {
 }
 
 interface EditorState {
-            row: number;
-            column: number;
-            element: number;
-            editorValue: string;
+    row: number;
+    column: number;
+    element: number;
+    editorValue: string;
+    searchText: string;
+    options: any;
 }
 
 interface TableState {
-        version: number;
-        columns: Array<string>;  // property ids
-        rows: Array<string>;     // instance ids
-        data: Array<Array<string>>;
-        instanceToRow: StrToIndex;
-        propertyToColumn: StrToIndex;
-        pending: Array<Update>;
-        uncommitted: Array<Update>;
-        editorState: EditorState;
-        cache: Cache;
+    version: number;
+    columns: Array<string>;  // property ids
+    rows: Array<string>;     // instance ids
+    data: Array<Array<string>>;
+    instanceToRow: StrToIndex;
+    propertyToColumn: StrToIndex;
+    pending: Array<Update>;
+    uncommitted: Array<Update>;
+    editorState: EditorState;
+    cache: Cache;
 }
 
 interface InstanceName {
@@ -242,7 +244,7 @@ var applyAddProperty = function (state : TableState, property : PropDef) : Table
         propertyToColumn: setMapValueStruct(property.id, state.columns.length),
         columns: {$push: [
             property.id
-           ]},
+        ]},
         cache: {properties: {$merge: propMap}}};
 
     var state = <TableState>React.addons.update(state, update)

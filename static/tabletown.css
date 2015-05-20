@@ -8,8 +8,8 @@
 }
 
 table.table-town {
-    width: 100%;
-    max-width: 100%;
+//    width: 100%;
+//    max-width: 100%;
 
     border: 1px solid black;
     border-spacing: 0;
@@ -23,9 +23,8 @@ table.table-town td, table.table-town th {
     height: 20px;
 }
 
-table.table-town th {
-    /* I don't fully understand, but this appears to not actually set the width, but it does avoid the resizing problem when the input box moves */
-    width: 200px;
+table.table-town th, table.table-town td, table.table-town td input {
+    width: 100px;
 }
 
 table.table-town td {
