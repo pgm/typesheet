@@ -335,107 +335,7 @@ function initTableTown(tableDivId) {
     var db = {
         txnId: 1,
         transactions: [],
-        queryType: function(typeId) {
-            var thingTypeDef = {
-                id: "Core/Thing",
-                name: "Thing",
-                description: "Thing Description",
-                includedTypeIds: [],
-                propertyIds: ["Core/Thing/Name"],
-                nameIsUnique: true
-                };
-
-            var sampleTypeDef = {
-                id: "sampleType",
-                name: "name",
-                description: "description",
-                includedTypeIds: ["Core/Thing"],
-                propertyIds: ["sampleType/color"],
-                nameIsUnique: true
-                };
-
-            var colorTypeDef = {
-                id: "color",
-                name: "name",
-                description: "description",
-                includedTypeIds: ["Core/Thing"],
-                propertyIds: [],
-                nameIsUnique: true
-                };
-
-            var namePropDef = {
-                id: "Core/Thing/Name",
-                name: "Name",
-                description: "Description",
-                expectedTypeId: "Core/String",
-                reversePropertyId: null,
-                isUnique: false
-            };
-
-            var colorPropDef = {
-                id: "sampleType/color",
-                name: "Color",
-                description: "Description",
-                expectedTypeId: "color",
-                reversePropertyId: null,
-                isUnique: false
-            };
-
-            var thingTypeDef = {
-                id: "Core/Thing",
-                name: "Thing",
-                description: "Thing Description",
-                includedTypeIds: [],
-                propertyIds: ["Core/Thing/Name"],
-                nameIsUnique: true
-                };
-
-
-            var response = null;
-
-            if(typeId == "sampleType") {
-                response = {
-                    types: [thingTypeDef, sampleTypeDef],
-                    properties: [namePropDef, wordPropDef],
-                    txn: 1,
-                    rowIds: ["a", "b"],
-                    rows: [
-                        [["name1"], ["BLUE","RED"]],
-                        [["name2"], ["GREEN"]]
-                    ]
-                };
-            } else if(typeId == "color") {
-                response = {
-                    types: [thingTypeDef, colorTypeDef],
-                    properties: [namePropDef],
-                    txn: 1,
-                    rowIds: ["RED", "BLUE", "GREEN"],
-                    rows: [
-                        [["Red"]],
-                        [["Blue"]],
-                        [["Green"]]
-                    ]
-                };
-            }
-
-            if(response == null) {
-                var promise = new Promise(function(resolve, reject){
-                    setTimeout(function(){
-                        reject("No such type: "+typeId);
-                    }, 1000);
-                });
-                return promise;
-            }
-
-            var promise = new Promise(function(resolve, reject){
-                // after 1 second return response
-                setTimeout(function(){
-                    resolve(response);
-                }, 1000);
-            });
-
-            return promise;
-        },
+        loadSheet: mockLoadSheet,
         update: function(ops) {
             var promise = new Promise(function(resolve, reject){
                 // after 1 second report transaction id
@@ -491,9 +391,7 @@ function initTableTown(tableDivId) {
         editor.setState(state)
         } );
 
-    db.queryType("sampleType").then(function(response){
-        controller.loadFromQueryTypeResponse(response);
-    });
+    controller.loadSheet("sheet1");
 
     setInterval(function() {
         db.queryUpdates(controller.state.version).then(function(response) {

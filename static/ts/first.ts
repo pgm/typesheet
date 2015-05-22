@@ -1,4 +1,5 @@
 ///<reference path="react-addons.d.ts" />
+///<reference path="es6-promise.d.ts" />
 
 "use strict";
 
@@ -67,12 +68,157 @@ interface TableState {
     cache: Cache;
 }
 
-interface InstanceName {
-    id: string;
-    name: string;
+// all the data required to load a sheet.  This is the type requested, all included types, all instances, and all (instance, name) pairs for referenced properties
+// may ultimately require multiple db round trips to collect all of this information
+interface LoadSheetResponse {
+    typeId: string;
+    txnId: number;
+    propertyIds: Array<string>;
+    instanceIds: Array<string>;
+    data: Array<Array<Array<string>>>;
+    typeDefs: Array<TypeDef>;
+    propDefs: Array<PropDef>;
+    referencedTypeInstances: IdCache<Array<string>>;  // typeId -> list of ids of instances that have that type
+    instanceNames: IdCache<string>; // instance id -> instance name.  To be shown in lookups
 }
 
-var emptyModel = function () : TableState {
+var importData = function(state : TableState, txnId : number, rowIds : Array<string>, propertyIds : Array<string>, rows : Array<Array<Array<string>>> ) {
+    var projection = [];
+    var empty : Array<string> = [];
+    for(var rowIndex=0;rowIndex<state.rows.length;rowIndex++) {
+        var row : Array<Array<string>> = [];
+        for(var colIndex=0;colIndex<state.columns.length;colIndex++) {
+            row.push(empty);
+        }
+        projection.push(row);
+    }
+
+    for(var rowIndex=0;rowIndex<rowIds.length;rowIndex++) {
+        var instanceId = rowIds[rowIndex];
+        var row = rows[rowIndex];
+        var projRow = projection[state.instanceToRow[instanceId]];
+        if(! projRow) {
+            console.warn("projRow", projRow, "state.instanceToRow[instanceId]", state.instanceToRow[instanceId], "instanceId", instanceId);
+        }
+        for(var colIndex=0;colIndex<propertyIds.length;colIndex++) {
+            var propertyId = propertyIds[colIndex];
+
+            var elements = row[colIndex];
+            projRow[state.propertyToColumn[propertyId]] = elements;
+        }
+    }
+
+    var update = {data: {$set: projection}, version: {$set: txnId}};
+    return React.addons.update(state, update);
+}
+
+function addToTypeCache(s : TableState, types : Array<TypeDef>, properties : Array<PropDef>) : TableState {
+    var propMap = {};
+    for(var i=0;i<properties.length;i++) {
+        var p = properties[i];
+        propMap[p.id] = p;
+    }
+
+    var typeMap = {}
+    for(var i=0;i<types.length;i++) {
+        var t = types[i];
+        typeMap[t.id] = t;
+    }
+
+    var update = {cache: {properties: {$merge: propMap}, types: {$merge: typeMap}}};
+    return React.addons.update(s, update);
+}
+
+function updateNameCache(state : TableState, referencedTypeInstances: IdCache<Array<string>>, instanceNames: IdCache<string>) {
+    var update = {cache: {instanceIdsByType: {$merge: referencedTypeInstances}, instanceNames: {$merge: instanceNames}}};
+    return React.addons.update(state, update);
+}
+
+function handleSheetQueryResponse(state : TableState, response: LoadSheetResponse) : TableState {
+    state = addToTypeCache(state, response.typeDefs, response.propDefs);
+
+    // show all properties
+    for(var i=0;i<response.propertyIds.length;i++) {
+        var propId = response.propertyIds[i];
+        state = applyAddProperty(state, state.cache.properties[propId]);
+    }
+    // show all rows
+    for(var i=0;i<response.instanceIds.length;i++) {
+        state = applyAddInstance(state, response.instanceIds[i]);
+    }
+
+    state = importData(state, response.txnId, response.instanceIds, response.propertyIds, response.data);
+    state = updateNameCache(state, response.referencedTypeInstances, response.instanceNames);
+    return state;
+}
+
+interface UpdateResponse {
+    txn: number;
+}
+
+interface QueryUpdatesResponse {
+    txn: number;
+    ops: Array<Update>;
+}
+
+interface Db {
+    loadSheet(typeId : string) : Promise<LoadSheetResponse>;
+    update(updates : Array<Update>) : Promise<UpdateResponse>;
+    queryUpdates(afterTxn : number) : Promise<QueryUpdatesResponse>;
+}
+
+function mockLoadSheet(typeId: string) {
+    var thisType = {
+        id: typeId,
+        name: "Type",
+        description: "Description",
+        includedTypeIds: [],
+        propertyIds: ["colorProp"],
+        nameIsUnique: true
+    };
+
+    var colorType = {
+        id: "colorType",
+        name: "Color",
+        description: "Description",
+        includedTypeIds: [],
+        propertyIds: [],
+        nameIsUnique: true
+    };
+
+    var colorProp = {
+        id: "colorProp",
+        name: "isColor",
+        description: "",
+        expectedTypeId: "colorType",
+        reversePropertyId: null,
+        isUnique: false
+    };
+
+    var response : LoadSheetResponse = {
+        typeId: typeId,
+        txnId: 1,
+        propertyIds: ["colorProp"],
+        instanceIds: ["instance"],
+        data: [
+            [
+                ["red"]
+            ]
+        ],
+        typeDefs: [thisType, colorType],
+        propDefs: [colorProp],
+        referencedTypeInstances: {"colorType": ["red"]},
+        instanceNames: {"red": "Red"}
+    };
+
+    var p = new Promise<LoadSheetResponse>((resolve, reject) => {
+        resolve(response);
+    });
+
+    return p;
+}
+
+function emptyModel () : TableState {
     var state = {
         version: 0,
         columns: [],  // property ids
@@ -93,19 +239,21 @@ var emptyModel = function () : TableState {
     return state;
 }
 
-var updateInstanceNamesForType = function(state: TableState, typeId: string, instances: Array<InstanceName>) {
-    var byId = {};
-    for(var i=0;i<instances.length;i++) {
-        var instance = instances[i];
-        byId[instance.id] = instance.name;
-    }
-    var typeMap = {};
-    typeMap[typeId] = byId;
+// unused?
+//var updateInstanceNamesForType = function(state: TableState, typeId: string, instances: Array<InstanceName>) {
+//    var byId = {};
+//    for(var i=0;i<instances.length;i++) {
+//        var instance = instances[i];
+//        byId[instance.id] = instance.name;
+//    }
+//    var typeMap = {};
+//    typeMap[typeId] = byId;
+//
+//    return React.addons.update(state, {cache: {instancesByType: {$merge: typeMap}}})
+//}
 
-    return React.addons.update(state, {cache: {instancesByType: {$merge: typeMap}}})
-}
 
-var applyUpdate = function (state : TableState, update : Update) : TableState {
+function applyUpdate (state : TableState, update : Update) : TableState {
     if (update.op == "AV") {
         return applyAddValue(state, update.instance, update.property, update.value);
     } else if (update.op == "DV") {
@@ -120,7 +268,7 @@ var applyUpdate = function (state : TableState, update : Update) : TableState {
     }
 }
 
-var applyAddValue = function (state : TableState, instance : string, property : string, value : string) : TableState{
+function applyAddValue (state : TableState, instance : string, property : string, value : string) : TableState{
     var row = state.instanceToRow[instance];
     var column = state.propertyToColumn[property];
 
@@ -153,17 +301,15 @@ var applyAddValue = function (state : TableState, instance : string, property : 
     return state2;
 };
 
-var dropValueFn = function (value) {
-    return function (list) {
-        var newList = [];
-        for (var i = 0; i < list.length; i++) {
-            var t = list[i];
-            if (t != value) {
-                newList.push(t);
-            }
+function dropValueFromList (value : string, list : Array<string>) : Array<string> {
+    var newList = [];
+    for (var i = 0; i < list.length; i++) {
+        var t = list[i];
+        if (t != value) {
+            newList.push(t);
         }
-        return newList;
     }
+    return newList;
 }
 
 var applyDelValue = function (state : TableState, instance : string, property : string, value: string) : TableState {
@@ -175,7 +321,8 @@ var applyDelValue = function (state : TableState, instance : string, property : 
         return state;
     }
 
-    var update1 = {$apply: dropValueFn(value)};
+    var dropFn = function(list) { return dropValueFromList(value, list) };
+    var update1 = {$apply: dropFn};
     var update2 = {};
     update2[column] = update1;
     var update3 = {};
@@ -344,4 +491,24 @@ var applySyncComplete = function (state, newVersion) {
 
     var update = {version: {$set: newVersion}, pending: {$set: newPending}};
     return React.addons.update(state, update)
+}
+
+interface SelectOption {
+    value: string;
+    text: string;
+}
+
+function makeValueSuggestions(typeId : string, state : TableState) : Array<SelectOption> {
+
+            // find all the instances with for the given type
+        var instanceIds = state.cache.instanceIdsByType[typeId];
+        // look up each one and add it as an option
+        var options = [];
+        for(var i=0;i<instanceIds.length;i++) {
+            var id = instanceIds[i];
+            var text = state.cache.instanceNames[id];
+
+            options.push({value: id, text: text})
+        }
+     return options;
 }

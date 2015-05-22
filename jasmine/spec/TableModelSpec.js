@@ -31,6 +31,30 @@
 //    });
 //});
 
+describe("LoadSheet", function () {
+    var c;
+
+    beforeEach(function () {
+        var s = emptyModel();
+
+        var mockDb = {loadSheet: mockLoadSheet};
+        c = new TableController(s, mockDb);
+    });
+
+    it("can load a sheet where columns reference a 2nd sheet", function (done) {
+        c.loadSheet("sheet1").then(function () {
+            console.log("postLoad", c.state);
+            expect(formatValueForDisplay("colorProp", c.state.cache, "red")).toEqual("Red");
+            expect(makeValueSuggestions("colorType", c.state)).toEqual([{value: "red", text: "Red"}])
+        }).then(done)
+            .catch(function (error) {
+                console.error(error);
+                expect(error).toBeUndefined();
+                done();
+            });
+    });
+});
+
 describe("TableController", function () {
     var c;
 
@@ -49,27 +73,39 @@ describe("TableController", function () {
         c = new TableController(s, mockDb);
     });
 
-    it("updates an earlier value shows the right number of elements", function() {
+    it("updates an earlier value shows the right number of elements", function () {
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "0"})
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "1"})
 
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "data", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "data", value: "1"}
+        ]);
 
         // edit first element
         c.setElementFocus(0, 0, 0);
         c.updateEditorValue("2");
         c.acceptEditorValue();
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "uncommitted", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "uncommitted", value: "2"}
+        ]);
 
         c.applyCommitted(1, c.state.uncommitted);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "committed", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "committed", value: "2"}
+        ]);
 
         c.applySync(1, c.state.pending);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "data", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "data", value: "2"}
+        ]);
     })
 });
 
@@ -92,7 +128,7 @@ describe("TableController2", function () {
         c = new TableController(s, mockDb);
     });
 
-    it("clicking on an empty row results in creating a new instance", function() {
+    it("clicking on an empty row results in creating a new instance", function () {
         c.setElementFocus(2, 0, 0);
 
         var elements = getCellElements(2, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
@@ -225,30 +261,42 @@ describe("TableController2", function () {
         ])
     });
 
-    it("updates an earlier value shows the right number of elements", function() {
+    it("updates an earlier value shows the right number of elements", function () {
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "0"})
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "1"})
 
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "data", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "data", value: "1"}
+        ]);
 
         // edit first element
         c.setElementFocus(0, 0, 0);
         c.updateEditorValue("2");
         c.acceptEditorValue();
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "uncommitted", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "uncommitted", value: "2"}
+        ]);
 
         c.applyCommitted(1, c.state.uncommitted);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "committed", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "committed", value: "2"}
+        ]);
 
         c.applySync(1, c.state.pending);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "1"}, {type: "data", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "1"},
+            {type: "data", value: "2"}
+        ]);
     })
 
-    it("can import from 'type' query", function() {
+    it("can import from 'type' query", function () {
         var thingTypeDef = {
             id: "Core/Thing",
             name: "Thing",
@@ -256,7 +304,7 @@ describe("TableController2", function () {
             includedTypeIds: [],
             propertyIds: ["Core/Thing/Name"],
             nameIsUnique: true
-            };
+        };
 
         var namePropDef = {
             id: "Core/Thing/Name",
@@ -273,8 +321,12 @@ describe("TableController2", function () {
             txnId: 10,
             rowIds: ["a", "b"],
             rows: [
-                [["name1"]],
-                [["name2"]]
+                [
+                    ["name1"]
+                ],
+                [
+                    ["name2"]
+                ]
             ]
         };
 
@@ -282,7 +334,14 @@ describe("TableController2", function () {
         c.loadFromQueryTypeResponse(response);
         var s = c.state;
         expect(s.version).toBe(10);
-        expect(s.data).toEqual([[["name1"]],[["name2"]]]);
+        expect(s.data).toEqual([
+            [
+                ["name1"]
+            ],
+            [
+                ["name2"]
+            ]
+        ]);
         expect(s).toBeConsistent();
     });
 
@@ -290,39 +349,64 @@ describe("TableController2", function () {
         c.state = applyUpdate(c.state, {op: "AV", instance: "a", property: "x", value: "0"})
 
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"}
+        ]);
 
         // add an element
         c.setElementFocus(0, 0, 1);
 
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "editor", value: ""}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "editor", value: ""}
+        ]);
 
         c.updateEditorValue("1");
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "editor", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "editor", value: "1"}
+        ]);
 
         c.acceptEditorValue();
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "uncommitted", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "uncommitted", value: "1"}
+        ]);
 
         c.applyCommitted(1, c.state.uncommitted);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "committed", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "committed", value: "1"}
+        ]);
 
         c.applySync(1, c.state.pending);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "data", value: "1"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "data", value: "1"}
+        ]);
 
         // add a 3rd element
         c.setElementFocus(0, 0, 2);
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "data", value: "1"}, {type: "editor", value: ""}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "data", value: "1"},
+            {type: "editor", value: ""}
+        ]);
 
         c.updateEditorValue("2");
         c.acceptEditorValue();
         var els = getCellElements(0, 0, c.state.uncommitted, c.state.pending, c.state.data[0][0], c.state.editorState);
-        expect(els).toEqual([{type: "data", value: "0"}, {type: "data", value: "1"}, {type: "uncommitted", value: "2"}]);
+        expect(els).toEqual([
+            {type: "data", value: "0"},
+            {type: "data", value: "1"},
+            {type: "uncommitted", value: "2"}
+        ]);
     });
 
 });

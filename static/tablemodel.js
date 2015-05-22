@@ -24,6 +24,16 @@ function TableController(state, db) {
     this.db = db;
 };
 
+TableController.prototype.loadSheet = function(typeId) {
+    var c = this;
+    var updateState = function(response) {
+        console.log("updateState called");
+        var state = handleSheetQueryResponse(c.state, response);
+        c.setState(state);
+    }
+    return this.db.loadSheet(typeId).then(updateState);
+}
+
 TableController.prototype.setState = function (state) {
     this.state = state;
     for (var i = 0; i < this.stateListeners.length; i++) {
@@ -59,16 +69,7 @@ TableController.prototype.setElementFocus = function (row, column, element) {
     if(propDef.expectedTypeId == "Core/String") {
         options = null;
     } else {
-        // find all the instances with for the given type
-        var instanceIds = state.cache.instanceIdsByType[propDef.expectedTypeId];
-        // look up each one and add it as an option
-        options = [];
-        for(var i=0;i<options.length;i++) {
-            var id = instanceIds[i];
-            var text = state.cache.instanceNames[i];
-
-            options.push({value: id, text: text})
-        }
+        options = makeValueSuggestions(propDef.expectedTypeId, state);
         console.log("got options for ", propDef.expectedTypeId, ": ", options);
     }
     [ {text: "Abc", value: "abc"}, {text: "baaaah", value: "2"} ];
@@ -165,52 +166,7 @@ TableController.prototype.applySync = function(txn, updates) {
     }
 }
 
-var addToTypeCache = function(s, types, properties) {
-    var propMap = {};
-    for(var i=0;i<properties.length;i++) {
-        var p = properties[i];
-        propMap[p.id] = p;
-    }
 
-    var typeMap = {}
-    for(var i=0;i<types.length;i++) {
-        var t = types[i];
-        typeMap[t.id] = t;
-    }
-
-    var update = {cache: {properties: {$merge: propMap}, types: {$merge: typeMap}}};
-
-    console.log("before state update", s);
-    console.log("update", update);
-    return React.addons.update(s, update);
-}
-
-var importData = function(state, txnId, rowIds, propertyIds, rows) {
-    var projection = [];
-    var empty = [];
-    for(var rowIndex=0;rowIndex<state.rows.length;rowIndex++) {
-        var row = [];
-        for(var colIndex=0;colIndex<state.columns.length;colIndex++) {
-            row.push(empty);
-        }
-        projection.push(row);
-    }
-
-    for(var rowIndex=0;rowIndex<rowIds.length;rowIndex++) {
-        var instanceId = rowIds[rowIndex];
-        var row = rows[rowIndex];
-        var projRow = projection[state.instanceToRow[instanceId]];
-        for(var colIndex=0;colIndex<propertyIds.length;colIndex++) {
-            var propertyId = propertyIds[colIndex];
-
-            var elements = row[colIndex];
-            projRow[state.propertyToColumn[propertyId]] = elements;
-        }
-    }
-
-    var update = {data: {$set: projection}, version: {$set: txnId}};
-    return React.addons.update(state, update);
-}
 
 
 
@@ -320,8 +276,8 @@ formatValueForDisplay = function(propertyId, cache, value) {
     if(propDef.expectedTypeId == "Core/String") {
         return value;
     } else {
-        var instance = cache.instancesByType[propDef.expectedTypeId][value];
-        return instance.name;
+        var name = cache.instanceNames[value];
+        return name;
     }
 }
 
