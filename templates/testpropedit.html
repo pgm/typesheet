@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Table test{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="/static/tabletown.css">
+{% endblock %}
+
+{% block content %}
+
+  <h1>Editor</h1>
+  
+  <div id="new-prop-div">
+
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+  <script>
+      initPropertyEditor("new-prop-div")
+  </script>
+{% endblock %}
